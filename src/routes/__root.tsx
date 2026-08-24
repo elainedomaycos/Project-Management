@@ -23,7 +23,6 @@ import {
   LogOut,
   User as UserIcon,
   UserCircle,
-  Trophy,
   Archive,
   Settings2,
   Menu,
@@ -157,10 +156,6 @@ const NAV_ITEMS: readonly NavItem[] = [
     icon: GanttChart,
     roles: ["super_admin", "developer", "qa"],
   },
-];
-
-const HACKATHON_NAV: readonly NavItem[] = [
-  { to: "/hackathons", label: "Events", icon: Trophy, roles: ["super_admin", "developer", "qa"] },
 ];
 
 const EXTRA_NAV: readonly NavItem[] = [
@@ -365,34 +360,6 @@ function SidebarContent({
               Advanced
             </div>
             {EXTRA_NAV.filter(canSee).map((item) => {
-              const active = pathname === item.to;
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  onClick={onNavigate}
-                  className={[
-                    "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
-                    active
-                      ? "bg-primary/10 text-primary font-medium"
-                      : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent",
-                  ].join(" ")}
-                >
-                  <Icon className="size-4 shrink-0" strokeWidth={1.75} />
-                  <span className="truncate">{item.label}</span>
-                </Link>
-              );
-            })}
-          </div>
-        )}
-
-        {HACKATHON_NAV.filter(canSee).length > 0 && (
-          <div className="pt-4 mt-4 border-t border-border">
-            <div className="px-3 pb-2 text-[9px] font-mono uppercase text-muted-foreground tracking-wider">
-              Tracker
-            </div>
-            {HACKATHON_NAV.filter(canSee).map((item) => {
               const active = pathname === item.to;
               const Icon = item.icon;
               return (

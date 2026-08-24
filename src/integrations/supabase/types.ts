@@ -132,69 +132,6 @@ export type Database = {
         };
         Relationships: [];
       };
-      hackathons: {
-        Row: {
-          id: string;
-          name: string;
-          description: string | null;
-          theme: string | null;
-          category: string | null;
-          start_date: string;
-          end_date: string;
-          location: string | null;
-          registration_url: string | null;
-          announcement_url: string | null;
-          status: string | null;
-          created_by: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          name: string;
-          description?: string | null;
-          theme?: string | null;
-          category?: string | null;
-          start_date: string;
-          end_date: string;
-          location?: string | null;
-          registration_url?: string | null;
-          announcement_url?: string | null;
-          status?: string | null;
-          created_by: string;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          name?: string;
-          description?: string | null;
-          theme?: string | null;
-          category?: string | null;
-          start_date?: string;
-          end_date?: string;
-          location?: string | null;
-          registration_url?: string | null;
-          announcement_url?: string | null;
-          status?: string | null;
-          created_by?: string;
-          created_at?: string;
-        };
-        Relationships: [];
-      };
-      hackathon_projects: {
-        Row: {
-          hackathon_id: string;
-          project_id: string;
-        };
-        Insert: {
-          hackathon_id: string;
-          project_id: string;
-        };
-        Update: {
-          hackathon_id?: string;
-          project_id?: string;
-        };
-        Relationships: [];
-      };
       user_roles: {
         Row: {
           created_at: string;
