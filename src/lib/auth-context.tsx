@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useRef, useState, useEffect, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { readCache, writeCache } from "@/lib/local-cache";
 import type { User } from "@supabase/supabase-js";
@@ -57,6 +57,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [recoveryMode, setRecoveryMode] = useState(false);
+  // Flips true once init()'s server-validated getUser() settles. Until then,
+  // auth events are ignored so an unverified cached session can't paint the
+  // dashboard before validation completes.
+  const bootedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,25 +76,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function init() {
       try {
+        // Fast path: nothing stored locally -> not signed in. Skip the network
+        // entirely so logged-out boots land on /auth instantly.
         const {
-          data: { session },
-          error,
-        } = await withTimeout(supabase.auth.getSession(), 10000);
+          data: { session: cachedSession },
+        } = await supabase.auth.getSession();
         if (cancelled) return;
-        if (error) {
-          console.warn("[Auth] getSession error:", error.message);
+        if (!cachedSession) return;
+
+        // A token exists — verify it server-side before trusting it:
+        // getSession() does NOT verify the JWT, so a stale session (e.g. left
+        // over from a previous Supabase config on this origin) would paint the
+        // dashboard briefly before the background refresh failed and bounced
+        // the user to /auth. getUser() performs a real /auth/v1/user check.
+        const {
+          data: { user: u },
+          error,
+        } = await withTimeout(supabase.auth.getUser(), 10000);
+        if (cancelled) return;
+        if (error || !u) {
+          if (error && !error.message.includes("session missing")) {
+            console.warn("[Auth] getUser error:", error.message);
+          }
+          // Clear the invalid/stale token so the gate doesn't trust it again.
+          try {
+            await supabase.auth.signOut();
+          } catch {
+            /* nothing stored — fine */
+          }
           return;
         }
-        const u = session?.user ?? null;
         setUser(u);
-        if (u) {
-          const cached = readCache<Profile>(`profile:${u.id}`);
-          if (cached) setProfile(cached);
-          try {
-            await loadProfile(u.id, u.email ?? "");
-          } catch (e) {
-            console.warn("[Auth] loadProfile error:", e);
-          }
+        const cached = readCache<Profile>(`profile:${u.id}`);
+        if (cached) setProfile(cached);
+        try {
+          await loadProfile(u.id, u.email ?? "");
+        } catch (e) {
+          console.warn("[Auth] loadProfile error:", e);
         }
       } catch (e: unknown) {
         const errMsg = errorMessage(e);
@@ -106,12 +128,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               attempts + 1,
             );
             sessionStorage.setItem("auth_retries", String(attempts + 1));
-            localStorage.clear();
+            // Scope the reset to this app's auth state instead of wiping all
+            // of localStorage (other keys may belong to other tooling).
+            try {
+              await supabase.auth.signOut();
+            } catch {
+              /* best-effort */
+            }
             window.location.reload();
             return;
           }
         }
       } finally {
+        bootedRef.current = true;
         if (!cancelled) setLoading(false);
       }
     }
@@ -123,6 +152,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event === "PASSWORD_RECOVERY") {
         setRecoveryMode(true);
       }
+      // Boot-time truth comes solely from init()'s server-validated getUser().
+      // INITIAL_SESSION replays the unverified cached session, and any event
+      // racing init() would set the user before validation completes — which
+      // flashed the dashboard briefly before bouncing to /auth.
+      if (event === "INITIAL_SESSION" || !bootedRef.current) return;
       const u = session?.user ?? null;
       setUser(u);
       if (u) {
