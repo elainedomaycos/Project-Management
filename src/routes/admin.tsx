@@ -18,7 +18,7 @@ type ManagedUser = {
 
 type Project = { id: string; name: string };
 
-type Membership = { member_id: string; project_id: string };
+type Membership = { user_id: string; project_id: string; role: string };
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -47,7 +47,8 @@ function AdminPage() {
       const [profilesRes, projectsRes, membershipsRes] = await Promise.all([
         supabase.from("profiles").select("*").order("created_at", { ascending: false }),
         supabase.from("projects").select("id, name").order("name"),
-        supabase.from("project_members").select("member_id, project_id"),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any).from("group_memberships").select("user_id, project_id, role"),
       ]);
       if (profilesRes.data) setUsers(profilesRes.data as ManagedUser[]);
       if (projectsRes.data) setProjects(projectsRes.data as Project[]);
@@ -59,31 +60,35 @@ function AdminPage() {
   }
 
   function getUserProjectId(userId: string): string | null {
-    const m = memberships.find((mem) => mem.member_id === userId);
+    const m = memberships.find((mem) => mem.user_id === userId);
     return m?.project_id ?? null;
   }
 
   async function assignProject(userId: string, projectId: string) {
-    const old = memberships.find((m) => m.member_id === userId);
+    const old = memberships.find((m) => m.user_id === userId);
     if (old) {
-      await supabase
-        .from("project_members")
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from("group_memberships")
         .delete()
-        .eq("member_id", userId)
+        .eq("user_id", userId)
         .eq("project_id", old.project_id);
     }
     if (projectId) {
-      const { error } = await supabase
-        .from("project_members")
-        .upsert({ member_id: userId, project_id: projectId });
+      const user = users.find((u) => u.id === userId);
+      const groupRole = user?.role === "leader" ? "leader" : user?.role === "viewer" ? "viewer" : "developer";
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
+        .from("group_memberships")
+        .upsert({ user_id: userId, project_id: projectId, role: groupRole });
       if (error) {
         toast.error("Failed to assign project");
         return;
       }
     }
     setMemberships((prev) => [
-      ...prev.filter((m) => m.member_id !== userId),
-      ...(projectId ? [{ member_id: userId, project_id: projectId }] : []),
+      ...prev.filter((m) => m.user_id !== userId),
+      ...(projectId ? [{ user_id: userId, project_id: projectId, role: "developer" }] : []),
     ]);
     toast.success(projectId ? "Project assigned" : "Project removed");
   }
