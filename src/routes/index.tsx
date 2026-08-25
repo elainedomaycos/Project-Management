@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/console";
 import { useProject } from "@/lib/project-context";
 import { HEALTH_META } from "@/lib/health";
@@ -16,14 +16,8 @@ import {
 import {
   ListChecks,
   CheckCircle2,
-  Clock,
   AlertTriangle,
-  TrendingUp,
-  ArrowRight,
-  Users,
-  Target,
   Flame,
-  Shield,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -113,8 +107,7 @@ function ProgressRing({
 }
 
 function Dashboard() {
-  const navigate = useNavigate();
-  const { projects, tasks, currentProject, getAnalytics } = useProject();
+  const { projects, tasks, currentProject } = useProject();
 
   const viewTasks = currentProject ? tasks.filter((t) => t.projectId === currentProject.id) : tasks;
   const totalTasks = viewTasks.length;
@@ -159,10 +152,6 @@ function Dashboard() {
       pct: d.total > 0 ? Math.round((d.done / d.total) * 100) : 0,
     }))
     .sort((a, b) => b.pct - a.pct);
-
-  const displayProjects = currentProject
-    ? projects.filter((p) => p.id === currentProject.id)
-    : projects;
 
   return (
     <>
@@ -445,76 +434,7 @@ function Dashboard() {
           )}
         </div>
 
-        {/* Project Cards */}
-        <div>
-          <h2 className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest mb-4">
-            Projects
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {displayProjects.map((p) => {
-              const a = getAnalytics(p.id);
-              const health = HEALTH_META[p.healthStatus] ?? HEALTH_META.on_track;
-              return (
-                <div
-                  key={p.id}
-                  onClick={() => navigate({ to: "/tasks" })}
-                  className="bg-card border border-border rounded-2xl p-5 hover:border-primary/50 cursor-pointer transition-all hover:shadow-lg hover:shadow-primary/5 group"
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-bold group-hover:text-primary transition-colors">
-                      {p.name}
-                    </h3>
-                    <span
-                      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[9px] font-mono font-bold ${health.chip}`}
-                      title={`Health: ${health.label}${p.healthSource === "manual" ? " (manually set)" : " (auto)"}`}
-                    >
-                      <span className={`size-1.5 rounded-full ${health.dot}`} />
-                      {health.label.toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[10px] font-mono text-muted-foreground">{p.prefix}</span>
-                    {p.finalDefenseDate && (
-                      <span className="text-[10px] text-muted-foreground">
-                        Defense: {p.finalDefenseDate}
-                      </span>
-                    )}
-                  </div>
-                  <div className="mb-4">
-                    <div className="flex items-center justify-between text-xs mb-1.5">
-                      <span className="text-muted-foreground">Progress</span>
-                      <span className="font-mono font-bold">{a.overallProgress}%</span>
-                    </div>
-                    <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-primary transition-all duration-700"
-                        style={{ width: `${a.overallProgress}%` }}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-4 gap-2 text-center">
-                    <div>
-                      <div className="text-lg font-bold">{a.total}</div>
-                      <div className="text-[9px] font-mono text-muted-foreground">Tasks</div>
-                    </div>
-                    <div>
-                      <div className="text-lg font-bold text-success">{a.done}</div>
-                      <div className="text-[9px] font-mono text-muted-foreground">Done</div>
-                    </div>
-                    <div>
-                      <div className="text-lg font-bold text-info">{a.qa}</div>
-                      <div className="text-[9px] font-mono text-muted-foreground">QA</div>
-                    </div>
-                    <div>
-                      <div className="text-lg font-bold text-warning">{a.doing}</div>
-                      <div className="text-[9px] font-mono text-muted-foreground">Doing</div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+
       </div>
     </>
   );
