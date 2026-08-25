@@ -59,7 +59,14 @@ function errorMessage(e: unknown): string {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Start false so the auth page renders instantly.  Flip to true only when
+  // there is a cached Supabase session that needs server-side validation —
+  // this avoids the old "Loading… → Auth page" double-wait for visitors.
+  const [loading, setLoading] = useState(() => {
+    try {
+      return Object.keys(localStorage).some(k => k.includes("auth-token"));
+    } catch { return false; }
+  });
   const [recoveryMode, setRecoveryMode] = useState(false);
   // Flips true once init()'s server-validated getUser() settles. Until then,
   // auth events are ignored so an unverified cached session can't paint the

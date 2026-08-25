@@ -237,7 +237,7 @@ function AuthGate({ children }: { children: ReactNode }) {
     }
   }, [user, loading, recoveryMode, isAuthPage, router]);
 
-  if (loading || (!user && !isAuthPage) || (user && isAuthPage && !recoveryMode)) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-sm text-muted-foreground animate-pulse">Loading...</div>
