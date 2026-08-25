@@ -6,7 +6,6 @@ import {
   Clock,
   AlertTriangle,
   FileCheck,
-  ArrowRight,
   Circle,
   Loader2,
   FlaskConical,
@@ -15,6 +14,17 @@ import {
   User,
   Flag,
 } from "lucide-react";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 export const Route = createFileRoute("/client")({
   head: () => ({
@@ -25,6 +35,13 @@ export const Route = createFileRoute("/client")({
   }),
   component: ClientPage,
 });
+
+const STATUS_COLORS = {
+  pending: "#6b7280",
+  doing: "#eab308",
+  qa: "#3b82f6",
+  done: "#22c55e",
+};
 
 const PRIORITY_COLORS: Record<string, string> = {
   critical: "text-red-500",
@@ -54,8 +71,8 @@ function getProjectHealth(pct: number): { label: string; color: string; bg: stri
 
 function ProgressRing({
   pct,
-  size = 100,
-  strokeWidth = 6,
+  size = 180,
+  strokeWidth = 10,
 }: {
   pct: number;
   size?: number;
@@ -66,6 +83,12 @@ function ProgressRing({
   const offset = circumference - (pct / 100) * circumference;
   return (
     <svg width={size} height={size} className="shrink-0">
+      <defs>
+        <linearGradient id="clientProgressGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="var(--color-primary)" stopOpacity="0.2" />
+          <stop offset="100%" stopColor="var(--color-primary)" />
+        </linearGradient>
+      </defs>
       <circle
         cx={size / 2}
         cy={size / 2}
@@ -80,23 +103,35 @@ function ProgressRing({
         cy={size / 2}
         r={r}
         fill="none"
-        stroke="currentColor"
+        stroke="url(#clientProgressGrad)"
         strokeWidth={strokeWidth}
         strokeDasharray={circumference}
         strokeDashoffset={offset}
         strokeLinecap="round"
-        className="text-primary transition-all duration-700"
+        className="transition-all duration-1000 ease-out"
         transform={`rotate(-90 ${size / 2} ${size / 2})`}
       />
       <text
         x="50%"
-        y="50%"
+        y="46%"
         dominantBaseline="central"
         textAnchor="middle"
-        className="fill-primary text-lg font-bold"
-        fontSize={size * 0.22}
+        className="fill-foreground"
+        fontSize={size * 0.2}
+        fontWeight="800"
       >
         {pct}%
+      </text>
+      <text
+        x="50%"
+        y="64%"
+        dominantBaseline="central"
+        textAnchor="middle"
+        className="fill-muted-foreground"
+        fontSize={size * 0.06}
+        fontFamily="var(--font-mono)"
+      >
+        COMPLETE
       </text>
     </svg>
   );
@@ -107,35 +142,27 @@ function ClientPage() {
 
   const viewTasks = currentProject ? tasks.filter((t) => t.projectId === currentProject.id) : tasks;
 
-  const displayProjects = currentProject
-    ? projects.filter((p) => p.id === currentProject.id)
-    : projects;
-
-  const totalStats = displayProjects.reduce(
-    (acc, p) => {
-      const a = getAnalytics(p.id);
-      return {
-        total: acc.total + a.total,
-        done: acc.done + a.done,
-        doing: acc.doing + a.doing,
-        qa: acc.qa + a.qa,
-        pending: acc.pending + a.pending,
-      };
-    },
+  const totalStats = viewTasks.reduce(
+    (acc, t) => ({
+      total: acc.total + 1,
+      done: acc.done + (t.status === "done" ? 1 : 0),
+      doing: acc.doing + (t.status === "doing" ? 1 : 0),
+      qa: acc.qa + (t.status === "qa" ? 1 : 0),
+      pending: acc.pending + (t.status === "pending" ? 1 : 0),
+    }),
     { total: 0, done: 0, doing: 0, qa: 0, pending: 0 },
   );
 
-  // Active tasks (not done, sorted by most recent due date)
-  const recentTasks = [...viewTasks]
-    .filter((t) => t.status !== "done")
-    .sort((a, b) => {
-      const dateA = a.startDate || a.dueDate || "";
-      const dateB = b.startDate || b.dueDate || "";
-      return dateB.localeCompare(dateA);
-    })
-    .slice(0, 8);
+  const overallProgress = totalStats.total > 0 ? Math.round((totalStats.done / totalStats.total) * 100) : 0;
+  const overdue = viewTasks.filter(
+    (t) => t.dueDate && t.dueDate < new Date().toISOString().slice(0, 10) && t.status !== "done",
+  ).length;
 
-  // Developer workload
+  const activeTasks = [...viewTasks]
+    .filter((t) => t.status !== "done")
+    .sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || ""))
+    .slice(0, 10);
+
   const devMap = new Map<string, { done: number; total: number }>();
   viewTasks.forEach((t) => {
     if (!t.developer) return;
@@ -148,12 +175,18 @@ function ClientPage() {
     .map(([name, d]) => ({
       name,
       done: d.done,
-      total: d.total,
+      pending: d.total - d.done,
       pct: d.total > 0 ? Math.round((d.done / d.total) * 100) : 0,
     }))
     .sort((a, b) => b.pct - a.pct);
 
-  if (displayProjects.length === 0) {
+  const statusData = ["pending", "doing", "qa", "done"].map((s) => ({
+    name: s.charAt(0).toUpperCase() + s.slice(1),
+    value: viewTasks.filter((t) => t.status === s).length,
+    color: STATUS_COLORS[s as keyof typeof STATUS_COLORS],
+  }));
+
+  if (projects.length === 0) {
     return (
       <>
         <PageHeader crumbs={[{ label: "Project Management" }, { label: "Client Portal" }]} />
@@ -180,74 +213,262 @@ function ClientPage() {
           { label: currentProject?.name ?? "Client Portal" },
         ]}
         status={{
-          label: `${displayProjects.length} project${displayProjects.length > 1 ? "s" : ""} · ${totalStats.done}/${totalStats.total} tasks done`,
-          tone: "info",
+          label: `${totalStats.total} tasks · ${overdue} overdue`,
+          tone: overdue > 0 ? "warn" : "info",
         }}
       />
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-8">
-        {/* Global Stats Bar */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          {[
-            {
-              label: "Total Tasks",
-              value: totalStats.total,
-              icon: ScrollText,
-              color: "text-primary",
-            },
-            {
-              label: "Completed",
-              value: totalStats.done,
-              icon: CheckCircle2,
-              color: "text-success",
-            },
-            { label: "In Progress", value: totalStats.doing, icon: Loader2, color: "text-warning" },
-            { label: "In Testing", value: totalStats.qa, icon: FlaskConical, color: "text-info" },
-            {
-              label: "Pending",
-              value: totalStats.pending,
-              icon: Circle,
-              color: "text-muted-foreground",
-            },
-          ].map((s) => (
-            <div
-              key={s.label}
-              className="bg-card border border-border rounded-lg p-4 flex items-center gap-3"
-            >
-              <div className="size-9 rounded-lg bg-surface-2 grid place-items-center">
-                <s.icon className={`size-4 ${s.color}`} />
-              </div>
-              <div>
-                <div className="text-lg font-bold">{s.value}</div>
-                <div className="text-[9px] font-mono text-muted-foreground uppercase">
-                  {s.label}
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {/* Hero: Progress Ring + KPIs */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="bg-card border border-border rounded-2xl p-8 flex flex-col items-center justify-center relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
+            <ProgressRing pct={overallProgress} />
+            <p className="text-[10px] font-mono text-muted-foreground mt-4 uppercase tracking-widest">
+              {currentProject ? currentProject.name : "Overall Progress"}
+            </p>
+          </div>
+
+          <div className="lg:col-span-2 grid grid-cols-2 gap-4">
+            <div className="bg-card border border-border rounded-2xl p-5 relative overflow-hidden group hover:border-primary/30 transition-colors">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+              <div className="flex items-center gap-3 relative">
+                <div className="size-10 rounded-xl bg-primary/10 border border-primary/20 grid place-items-center text-primary">
+                  <ScrollText className="size-5" />
+                </div>
+                <div>
+                  <div className="text-3xl font-extrabold tracking-tight">{totalStats.total}</div>
+                  <div className="text-[10px] font-mono text-muted-foreground uppercase">Total Tasks</div>
                 </div>
               </div>
             </div>
-          ))}
+
+            <div className="bg-card border border-border rounded-2xl p-5 relative overflow-hidden group hover:border-success/30 transition-colors">
+              <div className="absolute inset-0 bg-gradient-to-br from-success/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+              <div className="flex items-center gap-3 relative">
+                <div className="size-10 rounded-xl bg-success/10 border border-success/20 grid place-items-center text-success">
+                  <CheckCircle2 className="size-5" />
+                </div>
+                <div>
+                  <div className="text-3xl font-extrabold tracking-tight text-success">{totalStats.done}</div>
+                  <div className="text-[10px] font-mono text-muted-foreground uppercase">Completed</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-card border border-border rounded-2xl p-5 relative overflow-hidden group hover:border-warning/30 transition-colors">
+              <div className="absolute inset-0 bg-gradient-to-br from-warning/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+              <div className="flex items-center gap-3 relative">
+                <div className="size-10 rounded-xl bg-warning/10 border border-warning/20 grid place-items-center text-warning">
+                  <Loader2 className="size-5" />
+                </div>
+                <div>
+                  <div className="text-3xl font-extrabold tracking-tight text-warning">{totalStats.doing}</div>
+                  <div className="text-[10px] font-mono text-muted-foreground uppercase">In Progress</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-card border border-border rounded-2xl p-5 relative overflow-hidden group hover:border-destructive/30 transition-colors">
+              <div className="absolute inset-0 bg-gradient-to-br from-destructive/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+              <div className="flex items-center gap-3 relative">
+                <div className="size-10 rounded-xl bg-destructive/10 border border-destructive/20 grid place-items-center text-destructive">
+                  <AlertTriangle className="size-5" />
+                </div>
+                <div>
+                  <div className="text-3xl font-extrabold tracking-tight text-destructive">{overdue}</div>
+                  <div className="text-[10px] font-mono text-muted-foreground uppercase">Overdue</div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
+        {/* Charts Row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Status Donut */}
+          <div className="bg-card border border-border rounded-2xl p-6">
+            <h2 className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest mb-5">
+              Task Status
+            </h2>
+            {totalStats.total === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-12">No tasks yet.</p>
+            ) : (
+              <div className="flex items-center gap-6">
+                <ResponsiveContainer width={160} height={160}>
+                  <PieChart>
+                    <Pie
+                      data={statusData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={45}
+                      outerRadius={70}
+                      paddingAngle={4}
+                      dataKey="value"
+                    >
+                      {statusData.map((entry, i) => (
+                        <Cell key={i} fill={entry.color} stroke="transparent" />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        background: "var(--color-card)",
+                        border: "1px solid var(--color-border)",
+                        borderRadius: "10px",
+                        fontSize: "12px",
+                        fontFamily: "var(--font-mono)",
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="space-y-3">
+                  {statusData.map((s) => (
+                    <div key={s.name} className="flex items-center gap-2.5 text-xs">
+                      <div className="size-2.5 rounded-full" style={{ background: s.color }} />
+                      <span className="text-muted-foreground w-16">{s.name}</span>
+                      <span className="font-mono font-bold">{s.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Developer Workload */}
+          <div className="bg-card border border-border rounded-2xl p-6">
+            <h2 className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest mb-5">
+              Developer Workload
+            </h2>
+            {devWorkload.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-12">No developer data.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={devWorkload} barGap={2} barCategoryGap="25%">
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize: 10, fill: "var(--color-muted-foreground)", fontFamily: "var(--font-mono)" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 10, fill: "var(--color-muted-foreground)", fontFamily: "var(--font-mono)" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "var(--color-card)",
+                      border: "1px solid var(--color-border)",
+                      borderRadius: "10px",
+                      fontSize: "12px",
+                      fontFamily: "var(--font-mono)",
+                    }}
+                  />
+                  <Bar
+                    dataKey="done"
+                    name="Done"
+                    stackId="a"
+                    fill="var(--color-success)"
+                    radius={[4, 4, 0, 0]}
+                  />
+                  <Bar
+                    dataKey="pending"
+                    name="Remaining"
+                    stackId="a"
+                    fill="rgba(255,255,255,0.08)"
+                    radius={[4, 4, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        {/* Active Tasks */}
+        {activeTasks.length > 0 && (
+          <div className="bg-card border border-border rounded-2xl p-6">
+            <h2 className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest mb-5 flex items-center gap-2">
+              <Clock className="size-3" />
+              Active Tasks
+            </h2>
+            <div className="divide-y divide-border border border-border rounded-xl overflow-hidden">
+              {activeTasks.map((t) => (
+                <div
+                  key={t.id}
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-surface-2 transition-colors"
+                >
+                  <StatusIcon status={t.status} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate">{t.title}</div>
+                    <div className="text-[10px] font-mono text-muted-foreground flex items-center gap-2 mt-0.5">
+                      <span>{t.taskId}</span>
+                      {t.developer && (
+                        <>
+                          <span>·</span>
+                          <User className="size-3" />
+                          <span>{t.developer}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] font-mono text-muted-foreground">
+                    <Flag className={`size-3 ${PRIORITY_COLORS[t.priority] || ""}`} />
+                    <span
+                      className={
+                        t.priority === "critical" || t.priority === "high"
+                          ? "text-warning"
+                          : ""
+                      }
+                    >
+                      {t.priority}
+                    </span>
+                  </div>
+                  {t.dueDate && (
+                    <div className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground">
+                      <Calendar className="size-3" />
+                      <span>
+                        {new Date(t.dueDate).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </span>
+                    </div>
+                  )}
+                  <span
+                    className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
+                      t.status === "doing"
+                        ? "bg-warning/10 text-warning"
+                        : t.status === "qa"
+                          ? "bg-info/10 text-info"
+                          : "bg-muted/10 text-muted-foreground"
+                    }`}
+                  >
+                    {t.status === "doing"
+                      ? "In Progress"
+                      : t.status === "qa"
+                        ? "Testing"
+                        : "Pending"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Per-Project Cards */}
-        {displayProjects.map((p) => {
+        {projects.map((p) => {
           const a = getAnalytics(p.id);
           const health = getProjectHealth(a.overallProgress);
-          const projectTasks = tasks.filter((t) => t.projectId === p.id);
-          const recentInProgress = projectTasks
-            .filter((t) => t.status !== "done")
-            .sort((a, b) => (b.dueDate || "").localeCompare(a.dueDate || ""))
-            .slice(0, 4);
-
           return (
-            <div key={p.id} className="bg-card border border-border rounded-xl overflow-hidden">
-              {/* Project Header */}
-              <div className="px-6 py-5 border-b border-border flex items-center justify-between">
+            <div key={p.id} className="bg-card border border-border rounded-2xl p-5">
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="size-12 rounded-xl bg-primary/10 border border-primary/20 grid place-items-center text-primary font-bold text-lg">
                     {p.prefix}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h2 className="text-lg font-bold">{p.name}</h2>
+                      <h3 className="text-sm font-bold">{p.name}</h3>
                       <span
                         className={`text-[9px] font-mono px-2 py-0.5 rounded-full border ${health.bg} ${health.color}`}
                       >
@@ -255,270 +476,12 @@ function ClientPage() {
                       </span>
                     </div>
                     <p className="text-[10px] font-mono text-muted-foreground mt-0.5">
-                      Created{" "}
-                      {new Date(p.createdAt).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                      {" · "}
-                      {a.total} task{a.total !== 1 ? "s" : ""}
+                      {a.total} task{a.total !== 1 ? "s" : ""} ·{" "}
+                      {a.done} done · {a.doing} in progress
                     </p>
                   </div>
                 </div>
-                <ProgressRing pct={a.overallProgress} size={72} strokeWidth={5} />
-              </div>
-
-              <div className="p-6 space-y-6">
-                {/* Task Summary Grid */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {[
-                    {
-                      label: "Done",
-                      value: a.done,
-                      total: a.total,
-                      color: "text-success",
-                      bg: "bg-success/5 border-success/20",
-                      bar: "bg-success",
-                    },
-                    {
-                      label: "Testing",
-                      value: a.qa,
-                      total: a.total,
-                      color: "text-info",
-                      bg: "bg-info/5 border-info/20",
-                      bar: "bg-info",
-                    },
-                    {
-                      label: "In Progress",
-                      value: a.doing,
-                      total: a.total,
-                      color: "text-warning",
-                      bg: "bg-warning/5 border-warning/20",
-                      bar: "bg-warning",
-                    },
-                    {
-                      label: "Pending",
-                      value: a.pending,
-                      total: a.total,
-                      color: "text-muted-foreground",
-                      bg: "bg-surface-2 border-border",
-                      bar: "bg-muted-foreground",
-                    },
-                  ].map((s) => (
-                    <div key={s.label} className={`rounded-lg border p-4 ${s.bg}`}>
-                      <div className="flex items-baseline justify-between mb-2">
-                        <span className={`text-2xl font-bold ${s.color}`}>{s.value}</span>
-                        <span className="text-[10px] font-mono text-muted-foreground">
-                          {s.total > 0 ? Math.round((s.value / s.total) * 100) : 0}%
-                        </span>
-                      </div>
-                      <div className="text-[10px] font-mono text-muted-foreground uppercase">
-                        {s.label}
-                      </div>
-                      {s.total > 0 && (
-                        <div className="h-1.5 bg-white/5 rounded-full mt-2 overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${s.bar}`}
-                            style={{ width: `${(s.value / s.total) * 100}%` }}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Field Progress */}
-                {a.fieldProgress.length > 0 && (
-                  <div>
-                    <h3 className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-2">
-                      <ScrollText className="size-3" />
-                      Field Progress
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {a.fieldProgress.map((f) => (
-                        <div
-                          key={f.name}
-                          className="bg-surface-2 border border-border rounded-lg p-4"
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-medium">{f.name}</span>
-                            <span className="text-xs text-muted-foreground">
-                              {f.done}/{f.total} tasks
-                            </span>
-                          </div>
-                          <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all ${
-                                f.pct >= 80
-                                  ? "bg-success"
-                                  : f.pct >= 50
-                                    ? "bg-warning"
-                                    : "bg-destructive"
-                              }`}
-                              style={{ width: `${f.pct}%` }}
-                            />
-                          </div>
-                          <div className="flex items-center justify-between mt-1.5">
-                            <span
-                              className={`text-[10px] font-mono font-bold ${
-                                f.pct >= 80
-                                  ? "text-success"
-                                  : f.pct >= 50
-                                    ? "text-warning"
-                                    : "text-destructive"
-                              }`}
-                            >
-                              {f.pct}%
-                            </span>
-                            {f.pct >= 80 && <CheckCircle2 className="size-3 text-success" />}
-                            {f.pct > 0 && f.pct < 80 && <Clock className="size-3 text-warning" />}
-                            {f.pct === 0 && <Circle className="size-3 text-muted-foreground" />}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Active Tasks Preview */}
-                {recentInProgress.length > 0 && (
-                  <div>
-                    <h3 className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-2">
-                      <Clock className="size-3" />
-                      Active Tasks
-                    </h3>
-                    <div className="divide-y divide-border border border-border rounded-lg overflow-hidden">
-                      {recentInProgress.map((t) => (
-                        <div
-                          key={t.id}
-                          className="flex items-center gap-3 px-4 py-3 bg-card hover:bg-surface-2 transition-colors"
-                        >
-                          <StatusIcon status={t.status} />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium truncate">{t.title}</div>
-                            <div className="text-[10px] font-mono text-muted-foreground flex items-center gap-2 mt-0.5">
-                              <span>{t.taskId}</span>
-                              {t.developer && (
-                                <>
-                                  <span>·</span>
-                                  <User className="size-3" />
-                                  <span>{t.developer}</span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 text-[10px] font-mono text-muted-foreground">
-                            <Flag className={`size-3 ${PRIORITY_COLORS[t.priority] || ""}`} />
-                            <span
-                              className={
-                                t.priority === "critical" || t.priority === "high"
-                                  ? "text-warning"
-                                  : ""
-                              }
-                            >
-                              {t.priority}
-                            </span>
-                          </div>
-                          {t.dueDate && (
-                            <div className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground">
-                              <Calendar className="size-3" />
-                              <span>
-                                {new Date(t.dueDate).toLocaleDateString("en-US", {
-                                  month: "short",
-                                  day: "numeric",
-                                })}
-                              </span>
-                            </div>
-                          )}
-                          <span
-                            className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
-                              t.status === "doing"
-                                ? "bg-warning/10 text-warning"
-                                : t.status === "qa"
-                                  ? "bg-info/10 text-info"
-                                  : "bg-muted/10 text-muted-foreground"
-                            }`}
-                          >
-                            {t.status === "doing"
-                              ? "In Progress"
-                              : t.status === "qa"
-                                ? "Testing"
-                                : "Pending"}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Developer Workload */}
-                {devWorkload.length > 0 && (
-                  <div>
-                    <h3 className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-2">
-                      <User className="size-3" />
-                      Developer Workload
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {devWorkload.map((d) => (
-                        <div
-                          key={d.name}
-                          className="bg-surface-2 border border-border rounded-lg p-4"
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              <div className="size-7 rounded-full bg-primary/10 border border-primary/20 grid place-items-center text-[9px] font-bold text-primary">
-                                {d.name.slice(0, 2).toUpperCase()}
-                              </div>
-                              <span className="text-sm font-medium">{d.name}</span>
-                            </div>
-                            <span className="text-xs font-mono text-muted-foreground">
-                              {d.done}/{d.total}
-                            </span>
-                          </div>
-                          <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all ${
-                                d.pct >= 80
-                                  ? "bg-success"
-                                  : d.pct >= 50
-                                    ? "bg-warning"
-                                    : "bg-destructive"
-                              }`}
-                              style={{ width: `${d.pct}%` }}
-                            />
-                          </div>
-                          <div className="flex items-center justify-between mt-1.5">
-                            <span
-                              className={`text-[10px] font-mono font-bold ${
-                                d.pct >= 80
-                                  ? "text-success"
-                                  : d.pct >= 50
-                                    ? "text-warning"
-                                    : "text-destructive"
-                              }`}
-                            >
-                              {d.pct}% complete
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Empty state */}
-                {a.total === 0 && (
-                  <div className="text-center py-6">
-                    <div className="size-12 rounded-full bg-surface-2 border border-border grid place-items-center mx-auto text-muted-foreground mb-3">
-                      <FileCheck className="size-6" />
-                    </div>
-                    <p className="text-sm text-muted-foreground">No tasks yet for this project.</p>
-                    <p className="text-[10px] font-mono text-muted-foreground mt-1">
-                      Tasks will appear here once assigned by the project manager.
-                    </p>
-                  </div>
-                )}
+                <ProgressRing pct={a.overallProgress} size={64} strokeWidth={5} />
               </div>
             </div>
           );
