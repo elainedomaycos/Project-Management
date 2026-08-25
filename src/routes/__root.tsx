@@ -274,10 +274,8 @@ function AppShell({ pathname, queryClient }: { pathname: string; queryClient: Qu
           >
             <Menu className="size-4" />
           </button>
-          <div className="size-6 rounded-md bg-primary text-primary-foreground grid place-items-center font-bold italic text-[11px]">
-            TT
-          </div>
-          <span className="text-sm font-bold tracking-tight">Project Management</span>
+          <img src="/logo4.png" alt="Logo" className="size-6 rounded-lg object-cover" />
+                <span className="text-sm font-bold tracking-tight">Project Mngmt</span>
         </div>
         <NotificationCenter />
       </div>
@@ -285,11 +283,9 @@ function AppShell({ pathname, queryClient }: { pathname: string; queryClient: Qu
       {/* Desktop sidebar */}
       <nav className="hidden lg:flex w-56 shrink-0 flex-col border-r border-border bg-sidebar overflow-hidden">
         <div className="h-14 flex items-center gap-3 px-5 border-b border-border">
-          <div className="size-7 rounded-md bg-primary text-primary-foreground grid place-items-center font-bold italic text-sm">
-            TT
-          </div>
-          <div className="leading-tight">
-            <div className="text-sm font-bold tracking-tight">Project Management</div>
+          <img src="/logo4.png" alt="Logo" className="size-7 rounded-lg object-cover" />
+          <div className="leading-tight min-w-0">
+            <div className="text-sm font-bold tracking-tight">Project Mngmt</div>
             <div className="text-[10px] font-mono text-muted-foreground uppercase">
               v0.2 · console
             </div>
@@ -314,10 +310,8 @@ function AppShell({ pathname, queryClient }: { pathname: string; queryClient: Qu
           <nav className="absolute inset-y-0 left-0 w-72 max-w-[85vw] bg-sidebar border-r border-border flex flex-col shadow-xl">
             <div className="h-12 flex items-center justify-between px-4 border-b border-border">
               <div className="flex items-center gap-2">
-                <div className="size-6 rounded-md bg-primary text-primary-foreground grid place-items-center font-bold italic text-[11px]">
-                  TT
-                </div>
-                <span className="text-sm font-bold tracking-tight">Project Management</span>
+                <img src="/logo4.png" alt="Logo" className="size-6 rounded-lg object-cover" />
+          <span className="text-sm font-bold tracking-tight">Project Mngmt</span>
               </div>
               <button
                 onClick={closeNav}
