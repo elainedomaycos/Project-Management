@@ -307,24 +307,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await db()
           .from("profiles")
           .upsert({ id: data.user.id, display_name: displayName, role, email });
-        try {
-          if (role === "developer") {
-            const key = "developers";
-            const { data: existing } = await db()
-              .from("settings")
-              .select("value")
-              .eq("key", key)
-              .maybeSingle();
-            const list: string[] = existing?.value ?? [];
-            if (!list.some((n) => n.toLowerCase() === displayName.toLowerCase())) {
-              await db()
-                .from("settings")
-                .upsert({ key, value: [...list, displayName] });
-            }
-          }
-        } catch {
-          /* settings may not exist yet */
-        }
         setProfile(newProfile);
       }
       return null;

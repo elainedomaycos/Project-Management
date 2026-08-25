@@ -133,24 +133,6 @@ export type ProjectAnalytics = {
   qaWaiting: number;
 };
 
-function normalizeDevList(list: string[], profileMap: Map<string, string>): string[] {
-  const replaced = list.map((n) => {
-    const clean = n.trim();
-    const profileName = profileMap.get(clean.toLowerCase());
-    return profileName || clean;
-  });
-  const seen = new Map<string, string>();
-  for (const n of replaced) {
-    const key = n.toLowerCase();
-    if (!key) continue;
-    const existing = seen.get(key);
-    if (!existing || n.length < existing.length) {
-      seen.set(key, n);
-    }
-  }
-  return [...seen.values()];
-}
-
 function generateId(): string {
   return Math.random().toString(36).slice(2, 10);
 }
@@ -340,51 +322,24 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       }
       try {
-        const [projRes, taskRes, devRes, qaRes, profilesRes] = await Promise.all([
+        const [projRes, taskRes, profilesRes] = await Promise.all([
           db().from("projects").select("*"),
           db().from("tasks").select("*"),
-          db().from("settings").select("value").eq("key", "developers").single(),
-          db().from("settings").select("value").eq("key", "qa_users").single(),
-          db().from("profiles").select("display_name, email"),
+          db().from("profiles").select("display_name, role"),
         ]);
         if (projRes.data?.length) setAllProjects(projRes.data.map(fromDbProject));
         if (taskRes.data) setAllTasks(taskRes.data.map(fromDbTask));
 
-        const profileMap = new Map<string, string>();
-        for (const p of profilesRes.data ?? []) {
-          if (p.display_name && p.email) {
-            profileMap.set(p.email.split("@")[0].toLowerCase(), p.display_name);
-          }
-        }
-
-        const settingsDevs: string[] = devRes.data?.value ?? [];
-        const settingsQas: string[] = qaRes.data?.value ?? [];
-        if (settingsDevs.length) {
-          const cleaned = normalizeDevList(settingsDevs, profileMap);
-          setDeveloperState(cleaned);
-          if (JSON.stringify(cleaned) !== JSON.stringify(settingsDevs)) {
-            db()
-              .from("settings")
-              .upsert({ key: "developers", value: cleaned })
-              .then(
-                () => {},
-                () => {},
-              );
-          }
-        }
-        if (settingsQas.length) {
-          const cleaned = normalizeDevList(settingsQas, profileMap);
-          setQaState(cleaned);
-          if (JSON.stringify(cleaned) !== JSON.stringify(settingsQas)) {
-            db()
-              .from("settings")
-              .upsert({ key: "qa_users", value: cleaned })
-              .then(
-                () => {},
-                () => {},
-              );
-          }
-        }
+        // Derive developer / QA lists from profiles table by role
+        const profileList: { display_name: string; role: string }[] = profilesRes.data ?? [];
+        const devs = profileList
+          .filter((p) => p.role === "developer" && p.display_name)
+          .map((p) => p.display_name);
+        const qas = profileList
+          .filter((p) => p.role === "viewer" && p.display_name)
+          .map((p) => p.display_name);
+        setDeveloperState(devs);
+        setQaState(qas);
       } catch (e) {
         console.warn("Failed to load from Supabase, using defaults", e);
       } finally {
@@ -903,26 +858,12 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     setDeveloperState((prev) => {
       const key = name.trim().toLowerCase();
       if (prev.some((d) => d.toLowerCase() === key)) return prev;
-      const next = [...prev, name.trim()];
-      db()
-        .from("settings")
-        .upsert({ key: "developers", value: next })
-        .then(() => notify("success", "Developer added"))
-        .catch(() => notify("error", "Failed to add developer"));
-      return next;
+      return [...prev, name.trim()];
     });
   }, []);
 
   const removeDeveloper = useCallback((name: string) => {
-    setDeveloperState((prev) => {
-      const next = prev.filter((d) => d !== name);
-      db()
-        .from("settings")
-        .upsert({ key: "developers", value: next })
-        .then(() => notify("success", "Developer removed"))
-        .catch(() => notify("error", "Failed to remove developer"));
-      return next;
-    });
+    setDeveloperState((prev) => prev.filter((d) => d !== name));
   }, []);
 
   const addQaUser = useCallback((name: string) => {
@@ -930,26 +871,12 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     setQaState((prev) => {
       const key = name.trim().toLowerCase();
       if (prev.some((q) => q.toLowerCase() === key)) return prev;
-      const next = [...prev, name.trim()];
-      db()
-        .from("settings")
-        .upsert({ key: "qa_users", value: next })
-        .then(() => notify("success", "QA user added"))
-        .catch(() => notify("error", "Failed to add QA user"));
-      return next;
+      return [...prev, name.trim()];
     });
   }, []);
 
   const removeQaUser = useCallback((name: string) => {
-    setQaState((prev) => {
-      const next = prev.filter((d) => d !== name);
-      db()
-        .from("settings")
-        .upsert({ key: "qa_users", value: next })
-        .then(() => notify("success", "QA user removed"))
-        .catch(() => notify("error", "Failed to remove QA user"));
-      return next;
-    });
+    setQaState((prev) => prev.filter((d) => d !== name));
   }, []);
 
   return (

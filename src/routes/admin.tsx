@@ -81,22 +81,6 @@ function AdminPage() {
 
     if (!error) {
       setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, display_name: trimmed } : u)));
-
-      const { data: devSetting } = await supabase
-        .from("settings")
-        .select("value")
-        .eq("key", "developers")
-        .maybeSingle();
-      const devList: string[] = (devSetting?.value ?? []) as string[];
-
-      const replaceInList = (list: string[]) =>
-        list.map((n) => (n.toLowerCase() === oldName.toLowerCase() ? trimmed : n));
-
-      if (devList.some((n) => n.toLowerCase() === oldName.toLowerCase())) {
-        await supabase
-          .from("settings")
-          .upsert({ key: "developers", value: replaceInList(devList) });
-      }
       toast.success("Name updated");
     } else {
       toast.error("Failed to update name");
@@ -111,31 +95,6 @@ function AdminPage() {
 
     if (!error) {
       setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u)));
-
-      const userName = user.display_name || user.name;
-      if (!userName) return;
-
-      const { data: devSetting } = await supabase
-        .from("settings")
-        .select("value")
-        .eq("key", "developers")
-        .maybeSingle();
-      const devList: string[] = (devSetting?.value ?? []) as string[];
-
-      if (newRole === "developer") {
-        if (!devList.some((n) => n.toLowerCase() === userName.toLowerCase())) {
-          await supabase
-            .from("settings")
-            .upsert({ key: "developers", value: [...devList, userName] });
-        }
-      } else {
-        if (devList.some((n) => n.toLowerCase() === userName.toLowerCase())) {
-          await supabase.from("settings").upsert({
-            key: "developers",
-            value: devList.filter((n) => n.toLowerCase() !== userName.toLowerCase()),
-          });
-        }
-      }
       toast.success("Role updated");
     } else {
       toast.error("Failed to update role");
