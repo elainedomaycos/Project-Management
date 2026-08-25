@@ -16,6 +16,10 @@ type ManagedUser = {
   created_at: string;
 };
 
+type Project = { id: string; name: string };
+
+type Membership = { member_id: string; project_id: string };
+
 export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [{ title: "Admin · Project Management" }, { name: "description", content: "User management." }],
@@ -27,26 +31,61 @@ function AdminPage() {
   const { profile, isAdmin } = useAuth();
 
   const [users, setUsers] = useState<ManagedUser[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [memberships, setMemberships] = useState<Membership[]>([]);
   const [loading, setLoading] = useState(true);
   const [nameVersions, setNameVersions] = useState<Record<string, number>>({});
   const [nameErrors, setNameErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    loadUsers();
+    loadAll();
   }, []);
 
-  async function loadUsers() {
+  async function loadAll() {
     setLoading(true);
     try {
-      const { data } = await supabase
-        .from("profiles")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (data) setUsers(data as ManagedUser[]);
+      const [profilesRes, projectsRes, membershipsRes] = await Promise.all([
+        supabase.from("profiles").select("*").order("created_at", { ascending: false }),
+        supabase.from("projects").select("id, name").order("name"),
+        supabase.from("project_members").select("member_id, project_id"),
+      ]);
+      if (profilesRes.data) setUsers(profilesRes.data as ManagedUser[]);
+      if (projectsRes.data) setProjects(projectsRes.data as Project[]);
+      if (membershipsRes.data) setMemberships(membershipsRes.data as Membership[]);
     } catch {
       /* ignore */
     }
     setLoading(false);
+  }
+
+  function getUserProjectId(userId: string): string | null {
+    const m = memberships.find((mem) => mem.member_id === userId);
+    return m?.project_id ?? null;
+  }
+
+  async function assignProject(userId: string, projectId: string) {
+    const old = memberships.find((m) => m.member_id === userId);
+    if (old) {
+      await supabase
+        .from("project_members")
+        .delete()
+        .eq("member_id", userId)
+        .eq("project_id", old.project_id);
+    }
+    if (projectId) {
+      const { error } = await supabase
+        .from("project_members")
+        .upsert({ member_id: userId, project_id: projectId });
+      if (error) {
+        toast.error("Failed to assign project");
+        return;
+      }
+    }
+    setMemberships((prev) => [
+      ...prev.filter((m) => m.member_id !== userId),
+      ...(projectId ? [{ member_id: userId, project_id: projectId }] : []),
+    ]);
+    toast.success(projectId ? "Project assigned" : "Project removed");
   }
 
   async function updateName(userId: string, newName: string) {
@@ -140,7 +179,6 @@ function AdminPage() {
       <PageHeader crumbs={[{ label: "Admin" }]} />
       <div className="flex-1 overflow-y-auto p-6">
         <div className="max-w-4xl mx-auto space-y-8">
-          {/* Users */}
           <section>
             <h2 className="text-base font-semibold mb-3 flex items-center gap-2">
               <Users className="size-4" />
@@ -151,19 +189,20 @@ function AdminPage() {
             ) : users.length === 0 ? (
               <p className="text-sm text-muted-foreground">No users found.</p>
             ) : (
-              <div className="bg-surface-2 border border-border rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
+              <div className="bg-surface-2 border border-border rounded-lg">
+                <table className="w-full text-sm table-fixed">
                   <thead>
                     <tr className="border-b border-border text-left text-[10px] font-mono uppercase text-muted-foreground">
-                      <th className="px-4 py-2">Name</th>
-                      <th className="px-4 py-2">Email</th>
-                      <th className="px-4 py-2">Role</th>
-                      <th className="px-4 py-2"></th>
+                      <th className="px-4 py-2 w-[25%]">Name</th>
+                      <th className="px-4 py-2 w-[30%]">Email</th>
+                      <th className="px-4 py-2 w-[20%]">Role</th>
+                      <th className="px-4 py-2 w-[25%]">Project</th>
                     </tr>
                   </thead>
                   <tbody>
                     {users.map((u) => {
                       const effectiveRole: UserRole = (u.role as UserRole) || "developer";
+                      const selectedProject = getUserProjectId(u.id);
                       return (
                         <tr key={u.id} className="border-b border-border last:border-0">
                           <td className="px-4 py-2">
@@ -182,7 +221,7 @@ function AdminPage() {
                               </span>
                             )}
                           </td>
-                          <td className="px-4 py-2 text-muted-foreground">{u.email}</td>
+                          <td className="px-4 py-2 text-muted-foreground truncate max-w-0">{u.email}</td>
                           <td className="px-4 py-2">
                             <select
                               value={effectiveRole}
@@ -196,11 +235,17 @@ function AdminPage() {
                               <option value="viewer">Viewer</option>
                             </select>
                           </td>
-                          <td className="px-4 py-2 text-right">
-                            <span className="inline-flex items-center gap-1 text-[10px] font-mono text-muted-foreground">
-                              {roleIcon(effectiveRole)}
-                              {effectiveRole.replace("_", " ")}
-                            </span>
+                          <td className="px-4 py-2">
+                            <select
+                              value={selectedProject ?? ""}
+                              onChange={(e) => assignProject(u.id, e.target.value)}
+                              className="w-full px-2 py-1 rounded bg-background border border-border text-xs font-medium focus:outline-none focus:border-primary"
+                            >
+                              <option value="">No project</option>
+                              {projects.map((p) => (
+                                <option key={p.id} value={p.id}>{p.name}</option>
+                              ))}
+                            </select>
                           </td>
                         </tr>
                       );
