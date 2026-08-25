@@ -102,7 +102,11 @@ function AuthPage() {
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
         <div className="w-full max-w-sm">
           <div className="mb-8 text-center">
-            <img src="/logo4.png" alt="Logo" className="size-14 rounded-2xl object-cover mx-auto mb-3" />
+            <img
+              src="/logo4.png"
+              alt="Logo"
+              className="size-14 rounded-2xl object-cover mx-auto mb-3"
+            />
             <h1 className="text-xl font-bold">Reset Password</h1>
             <p className="text-sm text-muted-foreground mt-1">Enter your new password</p>
           </div>
@@ -162,7 +166,11 @@ function AuthPage() {
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <img src="/logo4.png" alt="Logo" className="size-14 rounded-2xl object-cover mx-auto mb-3" />
+          <img
+            src="/logo4.png"
+            alt="Logo"
+            className="size-14 rounded-2xl object-cover mx-auto mb-3"
+          />
           <h1 className="text-xl font-bold">Project Management</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {mode === "login" ? "Sign in to your account" : "Create a new account"}

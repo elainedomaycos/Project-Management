@@ -316,7 +316,10 @@ function TasksPage() {
   return (
     <>
       <PageHeader
-        crumbs={[{ label: "Project Management" }, { label: currentProject?.name ?? "All Projects" }]}
+        crumbs={[
+          { label: "Project Management" },
+          { label: currentProject?.name ?? "All Projects" },
+        ]}
         status={{ label: `${tasks.length} tasks`, tone: "info" }}
         actions={
           (isAdmin || isLeader) && pid ? (

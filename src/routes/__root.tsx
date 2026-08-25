@@ -275,7 +275,7 @@ function AppShell({ pathname, queryClient }: { pathname: string; queryClient: Qu
             <Menu className="size-4" />
           </button>
           <img src="/logo4.png" alt="Logo" className="size-6 rounded-lg object-cover" />
-                <span className="text-sm font-bold tracking-tight">Project Mngmt</span>
+          <span className="text-sm font-bold tracking-tight">Project Mngmt</span>
         </div>
         <NotificationCenter />
       </div>
@@ -311,7 +311,7 @@ function AppShell({ pathname, queryClient }: { pathname: string; queryClient: Qu
             <div className="h-12 flex items-center justify-between px-4 border-b border-border">
               <div className="flex items-center gap-2">
                 <img src="/logo4.png" alt="Logo" className="size-6 rounded-lg object-cover" />
-          <span className="text-sm font-bold tracking-tight">Project Mngmt</span>
+                <span className="text-sm font-bold tracking-tight">Project Mngmt</span>
               </div>
               <button
                 onClick={closeNav}

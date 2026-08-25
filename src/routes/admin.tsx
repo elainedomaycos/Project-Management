@@ -22,7 +22,10 @@ type Membership = { user_id: string; project_id: string; role: string };
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
-    meta: [{ title: "Admin · Project Management" }, { name: "description", content: "User management." }],
+    meta: [
+      { title: "Admin · Project Management" },
+      { name: "description", content: "User management." },
+    ],
   }),
   component: AdminPage,
 });
@@ -76,7 +79,8 @@ function AdminPage() {
     }
     if (projectId) {
       const user = users.find((u) => u.id === userId);
-      const groupRole = user?.role === "leader" ? "leader" : user?.role === "viewer" ? "viewer" : "developer";
+      const groupRole =
+        user?.role === "leader" ? "leader" : user?.role === "viewer" ? "viewer" : "developer";
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error } = await (supabase as any)
         .from("group_memberships")
@@ -226,7 +230,9 @@ function AdminPage() {
                               </span>
                             )}
                           </td>
-                          <td className="px-4 py-2 text-muted-foreground truncate max-w-0">{u.email}</td>
+                          <td className="px-4 py-2 text-muted-foreground truncate max-w-0">
+                            {u.email}
+                          </td>
                           <td className="px-4 py-2">
                             <select
                               value={effectiveRole}
@@ -247,7 +253,9 @@ function AdminPage() {
                             >
                               <option value="">No project</option>
                               {projects.map((p) => (
-                                <option key={p.id} value={p.id}>{p.name}</option>
+                                <option key={p.id} value={p.id}>
+                                  {p.name}
+                                </option>
                               ))}
                             </select>
                           </td>

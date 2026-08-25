@@ -310,7 +310,11 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   // Load from Supabase on mount
   useEffect(() => {
     // Wipe any stale startup-repo cache from localStorage
-    try { localStorage.removeItem("tt:v1:project-data"); } catch {}
+    try {
+      localStorage.removeItem("tt:v1:project-data");
+    } catch {
+      /* ignore */
+    }
 
     async function load() {
       const cached = readCache<CachedProjectData>("project-data");
@@ -588,7 +592,10 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         });
       if (res?.error) {
         console.error("[addProject] Supabase error:", res.error);
-        notify("error", `Failed to create project: ${res.error.message ?? JSON.stringify(res.error)}`);
+        notify(
+          "error",
+          `Failed to create project: ${res.error.message ?? JSON.stringify(res.error)}`,
+        );
       } else {
         notify("success", "Project created");
       }
@@ -623,19 +630,24 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     if (updates.healthStatus !== undefined) dbUpdates.health_status = updates.healthStatus;
     if (updates.healthSource !== undefined) dbUpdates.health_source = updates.healthSource;
     try {
-      const res = await db()
-        .from("projects")
-        .update(dbUpdates)
-        .eq("id", id);
+      const res = await db().from("projects").update(dbUpdates).eq("id", id);
       if (res?.error) {
         console.error("[updateProject] error:", res.error);
-        if (!silent) notify("error", `Failed to update project: ${res.error.message ?? JSON.stringify(res.error)}`);
+        if (!silent)
+          notify(
+            "error",
+            `Failed to update project: ${res.error.message ?? JSON.stringify(res.error)}`,
+          );
         return;
       }
       if (!silent) notify("success", "Project updated");
     } catch (err: unknown) {
       console.error("[updateProject] exception:", err);
-      if (!silent) notify("error", `Failed to update project: ${err instanceof Error ? err.message : String(err)}`);
+      if (!silent)
+        notify(
+          "error",
+          `Failed to update project: ${err instanceof Error ? err.message : String(err)}`,
+        );
     }
   }
 
@@ -923,5 +935,3 @@ export function useProject() {
   if (!ctx) throw new Error("useProject must be used within ProjectProvider");
   return ctx;
 }
-
-

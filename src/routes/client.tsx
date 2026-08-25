@@ -145,7 +145,10 @@ function ClientPage() {
   return (
     <>
       <PageHeader
-        crumbs={[{ label: "Project Management" }, { label: currentProject?.name ?? "Client Portal" }]}
+        crumbs={[
+          { label: "Project Management" },
+          { label: currentProject?.name ?? "Client Portal" },
+        ]}
         status={{
           label: `${displayProjects.length} project${displayProjects.length > 1 ? "s" : ""} · ${totalStats.done}/${totalStats.total} tasks done`,
           tone: "info",
