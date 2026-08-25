@@ -758,6 +758,18 @@ function DefensePage() {
                               {item.description}
                             </p>
                           )}
+                          {item.link_url && (
+                            <a
+                              href={item.link_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/10 border border-primary/20 text-[10px] font-mono text-primary hover:bg-primary/20 transition-colors max-w-full"
+                              title={item.link_url}
+                            >
+                              <ExternalLink className="size-3 shrink-0" />
+                              <span className="truncate">{item.link_url}</span>
+                            </a>
+                          )}
                           <div className="flex items-center gap-3 flex-wrap text-[10px] text-muted-foreground">
                             {item.due_date && (
                               <span

@@ -229,22 +229,25 @@ function AuthGate({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isAuthPage = pathname === "/auth";
 
+  // Track whether auth has resolved at least once — only show spinner before first boot
+  const booted = useRef(false);
+  useEffect(() => {
+    if (!loading) booted.current = true;
+  }, [loading]);
+
   // After login, show the onboarding screen for at least 3 seconds
   const [onboarding, setOnboarding] = useState(false);
   const onboardingStart = useRef<number | null>(null);
 
   useEffect(() => {
     if (user && !loading) {
-      // Just became authenticated — start onboarding if not already running
       if (!onboardingStart.current) {
         onboardingStart.current = Date.now();
         setOnboarding(true);
-        const elapsed = Date.now() - onboardingStart.current;
-        const remaining = Math.max(0, 3000 - elapsed);
         const t = setTimeout(() => {
           setOnboarding(false);
           onboardingStart.current = null;
-        }, remaining);
+        }, 3000);
         return () => clearTimeout(t);
       }
     } else if (!user) {
@@ -273,8 +276,8 @@ function AuthGate({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
   }, [loading, isAuthPage, router]);
 
-  // Never render the dashboard until we have a confirmed user.
-  if (!isAuthPage && !user && !timedOut.current) {
+  // Only show spinner BEFORE first auth resolution — not on every page load/refresh
+  if (!isAuthPage && !booted.current && !user && !timedOut.current) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-6">
         <img src="/logo4.png" alt="Logo" className="size-12 rounded-xl object-cover" />
