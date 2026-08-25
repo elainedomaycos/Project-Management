@@ -664,16 +664,14 @@ function ProjectSelector() {
         </select>
         <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 size-3 text-muted-foreground pointer-events-none" />
       </div>
-      {(isAdmin || (isLeader && currentProject)) && (
+      {isAdmin && (
         <div className="flex gap-1">
-          {isAdmin && (
-            <button
-              onClick={() => setShowModal(true)}
-              className="flex-1 px-1.5 py-0.5 rounded text-[9px] font-mono uppercase text-primary border border-primary/30 hover:bg-primary/5 transition-colors"
-            >
-              + New
-            </button>
-          )}
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex-1 px-1.5 py-0.5 rounded text-[9px] font-mono uppercase text-primary border border-primary/30 hover:bg-primary/5 transition-colors"
+          >
+            + New
+          </button>
           {currentProject && (
             <button
               onClick={openManage}
@@ -683,7 +681,7 @@ function ProjectSelector() {
               Manage
             </button>
           )}
-          {isAdmin && projects.length > 1 && currentProject && (
+          {projects.length > 1 && currentProject && (
             <button
               onClick={() => archiveProject(currentProject.id)}
               className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-mono uppercase text-warning border border-warning/30 hover:bg-warning/5 transition-colors"
@@ -693,6 +691,15 @@ function ProjectSelector() {
             </button>
           )}
         </div>
+      )}
+      {isLeader && currentProject && (
+        <button
+          onClick={openManage}
+          className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-[9px] font-mono uppercase text-muted-foreground border border-border/60 hover:bg-surface-2 transition-colors"
+        >
+          <Settings2 className="size-3" />
+          Manage Project
+        </button>
       )}
 
       {showModal && (

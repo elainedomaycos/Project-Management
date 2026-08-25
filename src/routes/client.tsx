@@ -105,6 +105,8 @@ function ProgressRing({
 function ClientPage() {
   const { projects, tasks, currentProject, getAnalytics } = useProject();
 
+  const viewTasks = currentProject ? tasks.filter((t) => t.projectId === currentProject.id) : tasks;
+
   const displayProjects = currentProject
     ? projects.filter((p) => p.id === currentProject.id)
     : projects;
@@ -122,6 +124,34 @@ function ClientPage() {
     },
     { total: 0, done: 0, doing: 0, qa: 0, pending: 0 },
   );
+
+  // Active tasks (not done, sorted by most recent due date)
+  const recentTasks = [...viewTasks]
+    .filter((t) => t.status !== "done")
+    .sort((a, b) => {
+      const dateA = a.startDate || a.dueDate || "";
+      const dateB = b.startDate || b.dueDate || "";
+      return dateB.localeCompare(dateA);
+    })
+    .slice(0, 8);
+
+  // Developer workload
+  const devMap = new Map<string, { done: number; total: number }>();
+  viewTasks.forEach((t) => {
+    if (!t.developer) return;
+    const e = devMap.get(t.developer) ?? { done: 0, total: 0 };
+    e.total++;
+    if (t.status === "done") e.done++;
+    devMap.set(t.developer, e);
+  });
+  const devWorkload = Array.from(devMap.entries())
+    .map(([name, d]) => ({
+      name,
+      done: d.done,
+      total: d.total,
+      pct: d.total > 0 ? Math.round((d.done / d.total) * 100) : 0,
+    }))
+    .sort((a, b) => b.pct - a.pct);
 
   if (displayProjects.length === 0) {
     return (
@@ -416,6 +446,61 @@ function ClientPage() {
                                 ? "Testing"
                                 : "Pending"}
                           </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Developer Workload */}
+                {devWorkload.length > 0 && (
+                  <div>
+                    <h3 className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-2">
+                      <User className="size-3" />
+                      Developer Workload
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {devWorkload.map((d) => (
+                        <div
+                          key={d.name}
+                          className="bg-surface-2 border border-border rounded-lg p-4"
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <div className="size-7 rounded-full bg-primary/10 border border-primary/20 grid place-items-center text-[9px] font-bold text-primary">
+                                {d.name.slice(0, 2).toUpperCase()}
+                              </div>
+                              <span className="text-sm font-medium">{d.name}</span>
+                            </div>
+                            <span className="text-xs font-mono text-muted-foreground">
+                              {d.done}/{d.total}
+                            </span>
+                          </div>
+                          <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all ${
+                                d.pct >= 80
+                                  ? "bg-success"
+                                  : d.pct >= 50
+                                    ? "bg-warning"
+                                    : "bg-destructive"
+                              }`}
+                              style={{ width: `${d.pct}%` }}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between mt-1.5">
+                            <span
+                              className={`text-[10px] font-mono font-bold ${
+                                d.pct >= 80
+                                  ? "text-success"
+                                  : d.pct >= 50
+                                    ? "text-warning"
+                                    : "text-destructive"
+                              }`}
+                            >
+                              {d.pct}% complete
+                            </span>
+                          </div>
                         </div>
                       ))}
                     </div>
