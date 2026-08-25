@@ -65,6 +65,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // auth events are ignored so an unverified cached session can't paint the
   // dashboard before validation completes.
   const bootedRef = useRef(false);
+  // Set to true when init() confirmed a valid server-validated session.
+  // If init() concluded with no user (stale/expired token), we ignore
+  // SIGNED_IN events from the listener to prevent a stale cached session
+  // from briefly painting the dashboard.
+  const hasValidSessionRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,6 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
         setUser(u);
+        hasValidSessionRef.current = true;
         const cached = readCache<Profile>(`profile:${u.id}`);
         if (cached) setProfile(cached);
         try {
@@ -161,6 +167,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // racing init() would set the user before validation completes — which
       // flashed the dashboard briefly before bouncing to /auth.
       if (event === "INITIAL_SESSION" || !bootedRef.current) return;
+      // After init() concludes without a valid session, ignore SIGNED_IN
+      // events from Supabase's internal replay of a stale cached session.
+      // Only process events when init() confirmed a valid session, or on
+      // explicit sign-out/token-refresh.
+      if (event === "SIGNED_IN" && !hasValidSessionRef.current) return;
       const u = session?.user ?? null;
       setUser(u);
       if (u) {
@@ -259,6 +270,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signIn(email: string, password: string): Promise<string | null> {
     try {
+      hasValidSessionRef.current = true;
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       return error?.message ?? null;
     } catch (e: unknown) {
@@ -268,6 +280,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signUp(email: string, password: string, name: string): Promise<string | null> {
     try {
+      hasValidSessionRef.current = true;
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
