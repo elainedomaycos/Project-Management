@@ -214,8 +214,67 @@ function Dashboard() {
       />
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {/* Row 1: Block Readiness + Project Health + KPIs */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* KPI Row */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-card border border-border rounded-2xl p-5 relative overflow-hidden group hover:border-primary/30 transition-colors">
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+            <div className="flex items-center gap-3 relative">
+              <div className="size-10 rounded-xl bg-primary/10 border border-primary/20 grid place-items-center text-primary">
+                <ListChecks className="size-5" />
+              </div>
+              <div>
+                <div className="text-2xl font-extrabold tracking-tight">{totalTasks}</div>
+                <div className="text-[10px] font-mono text-muted-foreground uppercase">Tasks</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-card border border-border rounded-2xl p-5 relative overflow-hidden group hover:border-success/30 transition-colors">
+            <div className="absolute inset-0 bg-gradient-to-br from-success/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+            <div className="flex items-center gap-3 relative">
+              <div className="size-10 rounded-xl bg-success/10 border border-success/20 grid place-items-center text-success">
+                <CheckCircle2 className="size-5" />
+              </div>
+              <div>
+                <div className="text-2xl font-extrabold tracking-tight text-success">{totalDone}</div>
+                <div className="text-[10px] font-mono text-muted-foreground uppercase">Completed</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-card border border-border rounded-2xl p-5 relative overflow-hidden group hover:border-warning/30 transition-colors">
+            <div className="absolute inset-0 bg-gradient-to-br from-warning/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+            <div className="flex items-center gap-3 relative">
+              <div className="size-10 rounded-xl bg-warning/10 border border-warning/20 grid place-items-center text-warning">
+                <Flame className="size-5" />
+              </div>
+              <div>
+                <div className="text-2xl font-extrabold tracking-tight text-warning">
+                  {viewTasks.filter((t) => t.status === "doing").length}
+                </div>
+                <div className="text-[10px] font-mono text-muted-foreground uppercase">In Progress</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-card border border-border rounded-2xl p-5 relative overflow-hidden group hover:border-destructive/30 transition-colors">
+            <div className="absolute inset-0 bg-gradient-to-br from-destructive/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+            <div className="flex items-center gap-3 relative">
+              <div className="size-10 rounded-xl bg-destructive/10 border border-destructive/20 grid place-items-center text-destructive">
+                <AlertTriangle className="size-5" />
+              </div>
+              <div>
+                <div className="text-2xl font-extrabold tracking-tight text-destructive">
+                  {overdue > 0 ? overdue : 0}
+                </div>
+                <div className="text-[10px] font-mono text-muted-foreground uppercase">Overdue</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Gauge + Health Row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Block Readiness Gauge */}
           <div className="bg-card border border-border rounded-2xl p-6 flex flex-col items-center justify-center relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
@@ -284,65 +343,6 @@ function Dashboard() {
                 </div>
               </div>
             )}
-          </div>
-
-          {/* KPI Column */}
-          <div className="lg:col-span-2 grid grid-cols-4 gap-4">
-            <div className="bg-card border border-border rounded-2xl p-5 relative overflow-hidden group hover:border-primary/30 transition-colors">
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-              <div className="flex items-center gap-3 relative">
-                <div className="size-10 rounded-xl bg-primary/10 border border-primary/20 grid place-items-center text-primary">
-                  <ListChecks className="size-5" />
-                </div>
-                <div>
-                  <div className="text-2xl font-extrabold tracking-tight">{totalTasks}</div>
-                  <div className="text-[10px] font-mono text-muted-foreground uppercase">Tasks</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-card border border-border rounded-2xl p-5 relative overflow-hidden group hover:border-success/30 transition-colors">
-              <div className="absolute inset-0 bg-gradient-to-br from-success/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-              <div className="flex items-center gap-3 relative">
-                <div className="size-10 rounded-xl bg-success/10 border border-success/20 grid place-items-center text-success">
-                  <CheckCircle2 className="size-5" />
-                </div>
-                <div>
-                  <div className="text-2xl font-extrabold tracking-tight text-success">{totalDone}</div>
-                  <div className="text-[10px] font-mono text-muted-foreground uppercase">Completed</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-card border border-border rounded-2xl p-5 relative overflow-hidden group hover:border-warning/30 transition-colors">
-              <div className="absolute inset-0 bg-gradient-to-br from-warning/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-              <div className="flex items-center gap-3 relative">
-                <div className="size-10 rounded-xl bg-warning/10 border border-warning/20 grid place-items-center text-warning">
-                  <Flame className="size-5" />
-                </div>
-                <div>
-                  <div className="text-2xl font-extrabold tracking-tight text-warning">
-                    {viewTasks.filter((t) => t.status === "doing").length}
-                  </div>
-                  <div className="text-[10px] font-mono text-muted-foreground uppercase">In Progress</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-card border border-border rounded-2xl p-5 relative overflow-hidden group hover:border-destructive/30 transition-colors">
-              <div className="absolute inset-0 bg-gradient-to-br from-destructive/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-              <div className="flex items-center gap-3 relative">
-                <div className="size-10 rounded-xl bg-destructive/10 border border-destructive/20 grid place-items-center text-destructive">
-                  <AlertTriangle className="size-5" />
-                </div>
-                <div>
-                  <div className="text-2xl font-extrabold tracking-tight text-destructive">
-                    {overdue > 0 ? overdue : 0}
-                  </div>
-                  <div className="text-[10px] font-mono text-muted-foreground uppercase">Overdue</div>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
 
