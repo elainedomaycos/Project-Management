@@ -27,7 +27,7 @@ function DeveloperPage() {
     addQaUser,
     removeQaUser,
   } = useProject();
-  const { profile, isSuperAdmin, isQa } = useAuth();
+  const { profile, isAdmin, isLeader, isViewer } = useAuth();
   const [filterDev, setFilterDev] = useState("all");
   const [sortBy, setSortBy] = useState<"id-asc" | "id-desc">("id-desc");
   const [showUsers, setShowUsers] = useState(false);
@@ -63,7 +63,7 @@ function DeveloperPage() {
         crumbs={[{ label: "Task Tracker" }, { label: "Developer" }]}
         status={{ label: `${activeTasks.length} active tasks`, tone: "info" }}
         actions={
-          !isQa && (
+          !isViewer && (
             <button
               onClick={() => setShowUsers(true)}
               className="px-3 py-1.5 bg-surface-2 border border-border text-xs font-medium rounded hover:bg-surface-2/80 flex items-center gap-1.5"
@@ -127,7 +127,7 @@ function DeveloperPage() {
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <span className="font-mono text-[10px] text-primary font-bold">{t.taskId}</span>
                     <div className="shrink-0">
-                      {isQa || (!isSuperAdmin && t.developer !== profile?.name) ? (
+                      {!(isAdmin || isLeader || t.developer === profile?.name) ? (
                         <span className="px-1.5 py-0.5 text-[9px] font-mono text-muted-foreground bg-surface-2 rounded">
                           {t.status === "pending"
                             ? "Pending"

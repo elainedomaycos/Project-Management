@@ -10,6 +10,8 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { readCache, writeCache } from "@/lib/local-cache";
 import { useAuth } from "@/lib/auth-context";
+import type { HealthStatus, HealthSource } from "@/lib/health";
+import { computeAutoHealth } from "@/lib/health";
 import { toast } from "sonner";
 
 export type TaskStatus = "pending" | "doing" | "qa" | "done";
@@ -53,6 +55,10 @@ export type Project = {
   endUsers: string[];
   modules: string[];
   archivedAt: string | null;
+  finalDefenseDate: string;
+  adviserId: string | null;
+  healthStatus: HealthStatus;
+  healthSource: HealthSource;
 };
 
 export type AppView = "pm" | "developer" | "qa" | "client";
@@ -85,7 +91,16 @@ type ProjectContextType = {
   }) => void;
   updateProject: (
     id: string,
-    updates: { clientName?: string; endUsers?: string[]; modules?: string[] },
+    updates: {
+      clientName?: string;
+      endUsers?: string[];
+      modules?: string[];
+      finalDefenseDate?: string;
+      adviserId?: string | null;
+      healthStatus?: HealthStatus;
+      healthSource?: HealthSource;
+    },
+    opts?: { silent?: boolean },
   ) => void;
   archiveProject: (id: string) => void;
   restoreProject: (id: string) => void;
@@ -118,31 +133,6 @@ export type ProjectAnalytics = {
   qaWaiting: number;
 };
 
-const DEFAULT_PROJECTS: Project[] = [
-  {
-    id: "tourism",
-    name: "Tourism Management System",
-    prefix: "TS",
-    createdAt: "2026-03-01",
-    clientName: "",
-    endUsers: [],
-    modules: [],
-    archivedAt: null,
-  },
-  {
-    id: "cbms",
-    name: "CBMMS",
-    prefix: "CBMMS",
-    createdAt: "2026-02-15",
-    clientName: "",
-    endUsers: [],
-    modules: [],
-    archivedAt: null,
-  },
-];
-
-const DEFAULT_DEVELOPERS = ["Rachel", "Mcdoel", "Alvin", "John", "Elaine", "Carl"];
-
 function normalizeDevList(list: string[], profileMap: Map<string, string>): string[] {
   const replaced = list.map((n) => {
     const clean = n.trim();
@@ -160,15 +150,6 @@ function normalizeDevList(list: string[], profileMap: Map<string, string>): stri
   }
   return [...seen.values()];
 }
-
-const PIN_MAP: Record<string, string> = {
-  Rachel: "1111",
-  Mcdoel: "2222",
-  Alvin: "3333",
-  John: "4444",
-  Elaine: "5555",
-  Carl: "6666",
-};
 
 function generateId(): string {
   return Math.random().toString(36).slice(2, 10);
@@ -256,6 +237,10 @@ type ProjectRow = {
   end_users: string[] | null;
   modules: string[] | null;
   archived_at: string | null;
+  final_defense_date?: string | null;
+  adviser_id?: string | null;
+  health_status?: string | null;
+  health_source?: string | null;
 };
 
 function fromDbProject(r: ProjectRow): Project {
@@ -268,6 +253,10 @@ function fromDbProject(r: ProjectRow): Project {
     endUsers: r.end_users || [],
     modules: r.modules || [],
     archivedAt: r.archived_at || null,
+    finalDefenseDate: r.final_defense_date || "",
+    adviserId: r.adviser_id || null,
+    healthStatus: (r.health_status as HealthStatus) || "on_track",
+    healthSource: (r.health_source as HealthSource) || "auto",
   };
 }
 
@@ -311,15 +300,15 @@ async function notifyDeveloper(devName: string, message: string, taskId: string)
 
 export function ProjectProvider({ children }: { children: ReactNode }) {
   const { profile } = useAuth();
-  const [allProjects, setAllProjects] = useState<Project[]>(DEFAULT_PROJECTS);
+  const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [allTasks, setAllTasks] = useState<Task[]>([]);
   const [currentProject, setCurrentProjectState] = useState<Project | null>(() =>
-    getInitialProject(DEFAULT_PROJECTS),
+    getInitialProject([]),
   );
   const [currentView, setCurrentView] = useState<AppView>("pm");
   const [currentDeveloper, setCurrentDeveloper] = useState("");
-  const [developers, setDeveloperState] = useState<string[]>(DEFAULT_DEVELOPERS);
-  const [qaUsers, setQaState] = useState<string[]>(["Sara", "Mike"]);
+  const [developers, setDeveloperState] = useState<string[]>([]);
+  const [qaUsers, setQaState] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   const lastToast = useRef<string | number | null>(null);
@@ -338,6 +327,9 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
 
   // Load from Supabase on mount
   useEffect(() => {
+    // Wipe any stale startup-repo cache from localStorage
+    try { localStorage.removeItem("tt:v1:project-data"); } catch {}
+
     async function load() {
       const cached = readCache<CachedProjectData>("project-data");
       if (cached) {
@@ -456,6 +448,71 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Nudge the auto-health calculator whenever deliverables / sub-tasks change
+  const [healthTick, setHealthTick] = useState(0);
+  useEffect(() => {
+    const channel = supabase
+      .channel(`defense-changes:${++realtimeSeq}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "defense_deliverables" }, () =>
+        setHealthTick((t) => t + 1),
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "defense_subtasks" }, () =>
+        setHealthTick((t) => t + 1),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Keep group health in sync automatically while project health source is 'auto'
+  useEffect(() => {
+    const cp = currentProject;
+    if (!cp || cp.healthSource !== "auto") return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data, error } = await (supabase as any)
+          .from("defense_deliverables")
+          .select("status, due_date")
+          .eq("project_id", cp.id);
+        if (cancelled || error || !data) return;
+        const computed = computeAutoHealth(
+          data as { status: string; due_date: string | null }[],
+          cp.finalDefenseDate,
+          { tasks: allTasks.filter((t) => t.projectId === cp.id) },
+        );
+        if (!cancelled && computed !== cp.healthStatus) {
+          setAllProjects((prev) =>
+            prev.map((p) => (p.id === cp.id ? { ...p, healthStatus: computed } : p)),
+          );
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          void (supabase as any)
+            .from("projects")
+            .update({ health_status: computed })
+            .eq("id", cp.id)
+            .then((res: { error: { message: string } | null }) => {
+              if (res?.error) console.error("[health-sync]", res.error.message);
+            });
+        }
+      } catch (err) {
+        console.error("[health-sync]", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    currentProject?.id,
+    currentProject?.finalDefenseDate,
+    currentProject?.healthSource,
+    currentProject?.healthStatus,
+    allTasks,
+    healthTick,
+  ]);
+
   // Keep the selected project in sync when projects change (edits, archives, deletes)
   useEffect(() => {
     if (!currentProject) return;
@@ -554,6 +611,10 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       endUsers: data.endUsers,
       modules: data.modules,
       archivedAt: null,
+      finalDefenseDate: "",
+      adviserId: null,
+      healthStatus: "on_track",
+      healthSource: "auto",
     };
     setAllProjects((prev) => [...prev, p]);
     setCurrentProjectState(p);
@@ -575,24 +636,51 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
 
   function updateProject(
     id: string,
-    updates: { clientName?: string; endUsers?: string[]; modules?: string[] },
+    updates: {
+      clientName?: string;
+      endUsers?: string[];
+      modules?: string[];
+      finalDefenseDate?: string;
+      adviserId?: string | null;
+      healthStatus?: HealthStatus;
+      healthSource?: HealthSource;
+    },
+    opts?: { silent?: boolean },
   ) {
+    const silent = opts?.silent ?? false;
     setAllProjects((prev) => prev.map((p) => (p.id === id ? { ...p, ...updates } : p)));
-    const dbUpdates: Partial<{ client_name: string; end_users: string[]; modules: string[] }> = {};
+    const dbUpdates: Partial<{
+      client_name: string;
+      end_users: string[];
+      modules: string[];
+      final_defense_date: string;
+      adviser_id: string | null;
+      health_status: string;
+      health_source: string;
+    }> = {};
     if (updates.clientName !== undefined) dbUpdates.client_name = updates.clientName;
     if (updates.endUsers !== undefined) dbUpdates.end_users = updates.endUsers;
     if (updates.modules !== undefined) dbUpdates.modules = updates.modules;
+    if (updates.finalDefenseDate !== undefined)
+      dbUpdates.final_defense_date = updates.finalDefenseDate;
+    if (updates.adviserId !== undefined) dbUpdates.adviser_id = updates.adviserId || null;
+    if (updates.healthStatus !== undefined) dbUpdates.health_status = updates.healthStatus;
+    if (updates.healthSource !== undefined) dbUpdates.health_source = updates.healthSource;
     db()
       .from("projects")
       .update(dbUpdates)
       .eq("id", id)
-      .then((res: { error: unknown }) => {
-        console.log("[updateProject] success:", res);
-        notify("success", "Project updated");
+      .then((res: { error: { message: string } | null }) => {
+        if (res.error) {
+          console.error("[updateProject] error:", res.error.message);
+          if (!silent) notify("error", `Failed to update project: ${res.error.message}`);
+          return;
+        }
+        if (!silent) notify("success", "Project updated");
       })
       .catch((err: unknown) => {
         console.error("[updateProject] error:", err);
-        notify("error", "Failed to update project");
+        if (!silent) notify("error", "Failed to update project");
       });
   }
 
@@ -909,4 +997,4 @@ export function useProject() {
   return ctx;
 }
 
-export { DEFAULT_DEVELOPERS, PIN_MAP };
+

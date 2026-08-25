@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/console";
 import { useState } from "react";
 import { useProject, type QaStatus } from "@/lib/project-context";
 import { useAuth } from "@/lib/auth-context";
+import { atLeast } from "@/lib/permissions";
 import { CheckCircle2, XCircle, AlertTriangle, User, Search, ArrowUpDown } from "lucide-react";
 
 export const Route = createFileRoute("/qa")({
@@ -17,8 +18,8 @@ export const Route = createFileRoute("/qa")({
 
 function QaPage() {
   const { tasks, updateTask, currentProject, projects } = useProject();
-  const { isSuperAdmin, isQa, isDeveloper } = useAuth();
-  const canReview = isSuperAdmin || isQa;
+  const { profile } = useAuth();
+  const canReview = atLeast(profile?.role, "developer");
   const pid = currentProject?.id ?? null;
   const projectTasks = pid ? tasks.filter((t) => t.projectId === pid) : tasks;
   const projectName = (id: string) => projects.find((p) => p.id === id)?.name ?? id;

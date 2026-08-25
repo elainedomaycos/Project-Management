@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/console";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/integrations/supabase/client";
-import { Users, Shield, Code2, FlaskConical } from "lucide-react";
+import { Users, Shield, Code2, FlaskConical, GraduationCap } from "lucide-react";
 import type { UserRole } from "@/lib/auth-context";
 import { toast } from "sonner";
 
@@ -24,7 +24,7 @@ export const Route = createFileRoute("/admin")({
 });
 
 function AdminPage() {
-  const { profile, isSuperAdmin } = useAuth();
+  const { profile, isAdmin } = useAuth();
 
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,13 +87,7 @@ function AdminPage() {
         .select("value")
         .eq("key", "developers")
         .maybeSingle();
-      const { data: qaSetting } = await supabase
-        .from("settings")
-        .select("value")
-        .eq("key", "qa_users")
-        .maybeSingle();
       const devList: string[] = (devSetting?.value ?? []) as string[];
-      const qaList: string[] = (qaSetting?.value ?? []) as string[];
 
       const replaceInList = (list: string[]) =>
         list.map((n) => (n.toLowerCase() === oldName.toLowerCase() ? trimmed : n));
@@ -102,9 +96,6 @@ function AdminPage() {
         await supabase
           .from("settings")
           .upsert({ key: "developers", value: replaceInList(devList) });
-      }
-      if (qaList.some((n) => n.toLowerCase() === oldName.toLowerCase())) {
-        await supabase.from("settings").upsert({ key: "qa_users", value: replaceInList(qaList) });
       }
       toast.success("Name updated");
     } else {
@@ -129,13 +120,7 @@ function AdminPage() {
         .select("value")
         .eq("key", "developers")
         .maybeSingle();
-      const { data: qaSetting } = await supabase
-        .from("settings")
-        .select("value")
-        .eq("key", "qa_users")
-        .maybeSingle();
       const devList: string[] = (devSetting?.value ?? []) as string[];
-      const qaList: string[] = (qaSetting?.value ?? []) as string[];
 
       if (newRole === "developer") {
         if (!devList.some((n) => n.toLowerCase() === userName.toLowerCase())) {
@@ -143,33 +128,11 @@ function AdminPage() {
             .from("settings")
             .upsert({ key: "developers", value: [...devList, userName] });
         }
-        if (qaList.some((n) => n.toLowerCase() === userName.toLowerCase())) {
-          await supabase.from("settings").upsert({
-            key: "qa_users",
-            value: qaList.filter((n) => n.toLowerCase() !== userName.toLowerCase()),
-          });
-        }
-      } else if (newRole === "qa") {
-        if (!qaList.some((n) => n.toLowerCase() === userName.toLowerCase())) {
-          await supabase.from("settings").upsert({ key: "qa_users", value: [...qaList, userName] });
-        }
-        if (devList.some((n) => n.toLowerCase() === userName.toLowerCase())) {
-          await supabase.from("settings").upsert({
-            key: "developers",
-            value: devList.filter((n) => n.toLowerCase() !== userName.toLowerCase()),
-          });
-        }
       } else {
         if (devList.some((n) => n.toLowerCase() === userName.toLowerCase())) {
           await supabase.from("settings").upsert({
             key: "developers",
             value: devList.filter((n) => n.toLowerCase() !== userName.toLowerCase()),
-          });
-        }
-        if (qaList.some((n) => n.toLowerCase() === userName.toLowerCase())) {
-          await supabase.from("settings").upsert({
-            key: "qa_users",
-            value: qaList.filter((n) => n.toLowerCase() !== userName.toLowerCase()),
           });
         }
       }
@@ -179,7 +142,7 @@ function AdminPage() {
     }
   }
 
-  if (!isSuperAdmin) {
+  if (!isAdmin) {
     return (
       <>
         <PageHeader crumbs={[{ label: "Admin" }]} />
@@ -198,11 +161,15 @@ function AdminPage() {
 
   const roleIcon = (r: string) => {
     switch (r) {
-      case "super_admin":
+      case "admin":
         return <Shield className="size-3.5" />;
+      case "adviser":
+        return <GraduationCap className="size-3.5" />;
+      case "leader":
+        return <Shield className="size-3.5 opacity-60" />;
       case "developer":
         return <Code2 className="size-3.5" />;
-      case "qa":
+      case "viewer":
         return <FlaskConical className="size-3.5" />;
       default:
         return null;
@@ -263,9 +230,11 @@ function AdminPage() {
                               onChange={(e) => updateRole(u.id, e.target.value as UserRole)}
                               className="px-2 py-1 rounded bg-background border border-border text-xs font-medium focus:outline-none focus:border-primary"
                             >
-                              <option value="super_admin">Super Admin</option>
-                              <option value="developer">Developer</option>
-                              <option value="qa">QA</option>
+                              <option value="admin">Block Coordinator</option>
+                              <option value="adviser">Adviser</option>
+                              <option value="leader">Group Leader</option>
+                              <option value="developer">Member</option>
+                              <option value="viewer">Viewer</option>
                             </select>
                           </td>
                           <td className="px-4 py-2 text-right">

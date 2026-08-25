@@ -16,7 +16,6 @@ import {
   FlaskConical,
   ExternalLink,
   Key,
-  BarChart3,
   ChevronDown,
   X,
   Shield,
@@ -28,12 +27,14 @@ import {
   Menu,
   Plus,
   GanttChart,
+  Target,
 } from "lucide-react";
 
 import appCss from "../styles.css?url";
 import { ProjectProvider, useProject, type AppView } from "@/lib/project-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { TimelineProvider } from "@/lib/timeline-context";
+import { supabase } from "@/integrations/supabase/client";
 import { Toaster } from "@/components/ui/sonner";
 import { NotificationCenter } from "@/components/notification-center";
 
@@ -139,34 +140,65 @@ type NavItem = {
   roles: string[];
 };
 
-const NAV_ITEMS: readonly NavItem[] = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, roles: ["super_admin", "developer", "qa"] },
-  { to: "/tasks", label: "Tasks", icon: ListChecks, roles: ["super_admin", "developer", "qa"] },
-  { to: "/developer", label: "Developer", icon: Code2, roles: ["super_admin", "developer", "qa"] },
-  { to: "/qa", label: "QA Review", icon: FlaskConical, roles: ["super_admin", "developer", "qa"] },
-  {
-    to: "/client",
-    label: "Client Portal",
-    icon: ExternalLink,
-    roles: ["super_admin", "developer", "qa"],
-  },
-  {
-    to: "/timeline",
-    label: "Project Timeline",
-    icon: GanttChart,
-    roles: ["super_admin", "developer", "qa"],
-  },
-];
+const ALL_ROLES = ["admin", "adviser", "leader", "developer", "viewer"];
 
-const EXTRA_NAV: readonly NavItem[] = [
+type NavSection = { heading: string; items: readonly NavItem[] };
+
+const NAV_SECTIONS: readonly NavSection[] = [
   {
-    to: "/credentials",
-    label: "Credentials",
-    icon: Key,
-    roles: ["super_admin", "developer", "qa"],
+    heading: "Work",
+    items: [
+      {
+        to: "/tasks",
+        label: "Tasks",
+        icon: ListChecks,
+        roles: ["admin", "leader", "developer", "viewer"],
+      },
+      {
+        to: "/developer",
+        label: "Developer",
+        icon: Code2,
+        roles: ["admin", "leader", "developer"],
+      },
+      {
+        to: "/qa",
+        label: "QA Review",
+        icon: FlaskConical,
+        roles: ["admin", "leader", "developer"],
+      },
+      { to: "/defense", label: "Final Defense", icon: Target, roles: ALL_ROLES },
+    ],
   },
-  { to: "/archive", label: "Archive", icon: Archive, roles: ["super_admin"] },
-  { to: "/admin", label: "Admin", icon: Shield, roles: ["super_admin", "developer", "qa"] },
+  {
+    heading: "View",
+    items: [
+      {
+        to: "/client",
+        label: "Client Portal",
+        icon: ExternalLink,
+        roles: ["admin", "leader", "developer", "viewer"],
+      },
+      {
+        to: "/timeline",
+        label: "Project Timeline",
+        icon: GanttChart,
+        roles: ["admin", "leader", "developer", "viewer"],
+      },
+    ],
+  },
+  {
+    heading: "Manage",
+    items: [
+      {
+        to: "/credentials",
+        label: "Credentials",
+        icon: Key,
+        roles: ["admin", "leader", "developer"],
+      },
+      { to: "/admin", label: "Admin", icon: Shield, roles: ["admin"] },
+      { to: "/archive", label: "Archive", icon: Archive, roles: ["admin"] },
+    ],
+  },
 ];
 
 function RootComponent() {
@@ -332,55 +364,55 @@ function SidebarContent({
         <ProjectSelector />
       </div>
 
-      <div className="flex-1 overflow-y-auto py-4 px-2 space-y-1 no-scrollbar">
-        {NAV_ITEMS.filter(canSee).map((item) => {
-          const active = pathname === item.to;
-          const Icon = item.icon;
+      <div className="flex-1 overflow-y-auto py-4 px-2 no-scrollbar">
+        {/* Dashboard always first */}
+        <div className="px-1 mb-1">
+          <Link
+            to="/"
+            onClick={onNavigate}
+            className={[
+              "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+              pathname === "/"
+                ? "bg-primary/10 text-primary font-medium"
+                : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent",
+            ].join(" ")}
+          >
+            <LayoutDashboard className="size-4 shrink-0" strokeWidth={1.75} />
+            <span className="truncate">Dashboard</span>
+          </Link>
+        </div>
+
+        {NAV_SECTIONS.map((section) => {
+          const visible = section.items.filter(canSee);
+          if (visible.length === 0) return null;
           return (
-            <Link
-              key={item.to}
-              to={item.to}
-              onClick={onNavigate}
-              className={[
-                "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
-                active
-                  ? "bg-primary/10 text-primary font-medium"
-                  : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent",
-              ].join(" ")}
-            >
-              <Icon className="size-4 shrink-0" strokeWidth={1.75} />
-              <span className="truncate">{item.label}</span>
-            </Link>
+            <div key={section.heading} className="px-1 mt-4 first:mt-0">
+              <div className="px-3 pb-1.5 text-[9px] font-mono uppercase text-muted-foreground/60 tracking-widest">
+                {section.heading}
+              </div>
+              {visible.map((item) => {
+                const active = pathname === item.to;
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    onClick={onNavigate}
+                    className={[
+                      "flex items-center gap-3 px-3 py-1.5 rounded-md text-sm transition-colors",
+                      active
+                        ? "bg-primary/10 text-primary font-medium"
+                        : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent",
+                    ].join(" ")}
+                  >
+                    <Icon className="size-4 shrink-0" strokeWidth={1.75} />
+                    <span className="truncate">{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
           );
         })}
-
-        {EXTRA_NAV.filter(canSee).length > 0 && (
-          <div className="pt-4 mt-4 border-t border-border">
-            <div className="px-3 pb-2 text-[9px] font-mono uppercase text-muted-foreground tracking-wider">
-              Advanced
-            </div>
-            {EXTRA_NAV.filter(canSee).map((item) => {
-              const active = pathname === item.to;
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  onClick={onNavigate}
-                  className={[
-                    "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
-                    active
-                      ? "bg-primary/10 text-primary font-medium"
-                      : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent",
-                  ].join(" ")}
-                >
-                  <Icon className="size-4 shrink-0" strokeWidth={1.75} />
-                  <span className="truncate">{item.label}</span>
-                </Link>
-              );
-            })}
-          </div>
-        )}
       </div>
 
       <div className="p-3 border-t border-border space-y-2">
@@ -515,7 +547,7 @@ function TagDropdown({
 function ProjectSelector() {
   const { projects, currentProject, setCurrentProject, addProject, updateProject, archiveProject } =
     useProject();
-  const { isSuperAdmin } = useAuth();
+  const { isAdmin } = useAuth();
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState<{
     name: string;
@@ -529,6 +561,8 @@ function ProjectSelector() {
     endUsers: string[];
     modules: string[];
   }>({ clientName: "", endUsers: [], modules: [] });
+  const [advisers, setAdvisers] = useState<{ id: string; name: string }[]>([]);
+  const [adviserId, setAdviserId] = useState<string>("");
 
   function openManage() {
     if (!currentProject) return;
@@ -537,7 +571,26 @@ function ProjectSelector() {
       endUsers: [...(currentProject.endUsers ?? [])],
       modules: [...(currentProject.modules ?? [])],
     });
+    setAdviserId(currentProject.adviserId ?? "");
     setShowManage(true);
+    // Load adviser accounts for assignment (RLS: profiles readable by authenticated)
+    void (async () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data } = await (supabase as any)
+          .from("profiles")
+          .select("id, display_name, email")
+          .eq("role", "adviser");
+        setAdvisers(
+          ((data ?? []) as { id: string; display_name: string; email: string }[]).map((p) => ({
+            id: p.id,
+            name: p.display_name || p.email,
+          })),
+        );
+      } catch {
+        setAdvisers([]);
+      }
+    })();
   }
 
   function handleManage() {
@@ -546,6 +599,7 @@ function ProjectSelector() {
       clientName: manageForm.clientName.trim(),
       endUsers: manageForm.endUsers,
       modules: manageForm.modules,
+      adviserId: adviserId || null,
     });
     setShowManage(false);
   }
@@ -579,7 +633,7 @@ function ProjectSelector() {
         </select>
         <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 size-3 text-muted-foreground pointer-events-none" />
       </div>
-      {isSuperAdmin && (
+      {isAdmin && (
         <div className="flex gap-1">
           <button
             onClick={() => setShowModal(true)}
@@ -725,6 +779,26 @@ function ProjectSelector() {
                   placeholder="e.g. Acme Corp"
                   className="w-full mt-1 px-3 py-2 rounded-md bg-surface-2 border border-border text-sm focus:outline-none focus:border-primary"
                 />
+              </div>
+              <div>
+                <label className="text-[10px] font-mono uppercase text-muted-foreground">
+                  Adviser
+                </label>
+                <select
+                  value={adviserId}
+                  onChange={(e) => setAdviserId(e.target.value)}
+                  className="w-full mt-1 px-3 py-2 rounded-md bg-surface-2 border border-border text-sm focus:outline-none focus:border-primary"
+                >
+                  <option value="">No adviser assigned</option>
+                  {advisers.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Create adviser accounts via Admin (role: Adviser), then assign them here.
+                </p>
               </div>
               <div>
                 <label className="text-[10px] font-mono uppercase text-muted-foreground">

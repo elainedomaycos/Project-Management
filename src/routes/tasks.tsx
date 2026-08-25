@@ -71,9 +71,10 @@ function TasksPage() {
     nextTaskId,
     developers,
   } = useProject();
-  const { profile, isSuperAdmin, isDeveloper, isQa } = useAuth();
+  const { profile, isAdmin, isLeader } = useAuth();
+  const role = profile?.role;
   const canEditTask = (task: Task) =>
-    isSuperAdmin || (isDeveloper && task.developer === profile?.name);
+    isAdmin || isLeader || (role === "developer" && task.developer === profile?.name);
   const [showNewModal, setShowNewModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [remarksDraft, setRemarksDraft] = useState("");
@@ -94,7 +95,7 @@ function TasksPage() {
   );
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [superAdmins, setSuperAdmins] = useState<string[]>([]);
+  const [admins, setadmins] = useState<string[]>([]);
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -110,12 +111,9 @@ function TasksPage() {
   useEffect(() => {
     (async () => {
       try {
-        const { data } = await supabase
-          .from("profiles")
-          .select("display_name")
-          .eq("role", "super_admin");
+        const { data } = await supabase.from("profiles").select("display_name").eq("role", "admin");
         if (data?.length) {
-          setSuperAdmins(data.map((p) => p.display_name || "").filter(Boolean));
+          setadmins(data.map((p) => p.display_name || "").filter(Boolean));
         }
       } catch {
         // ignore
@@ -184,7 +182,7 @@ function TasksPage() {
   }
 
   function creatorOptions(current: string): string[] {
-    const names = new Set(superAdmins);
+    const names = new Set(admins);
     if (current) names.add(current);
     return [...names];
   }
@@ -321,7 +319,7 @@ function TasksPage() {
         crumbs={[{ label: "Task Tracker" }, { label: currentProject?.name ?? "All Projects" }]}
         status={{ label: `${tasks.length} tasks`, tone: "info" }}
         actions={
-          isSuperAdmin && pid ? (
+          (isAdmin || isLeader) && pid ? (
             <button
               onClick={() => setShowNewModal(true)}
               className="px-3 py-1.5 bg-primary text-primary-foreground text-xs font-bold rounded hover:brightness-110 flex items-center gap-1.5"
@@ -590,19 +588,7 @@ function TasksPage() {
                     )}
                   </Td>
                   <Td>
-                    {isDeveloper ? (
-                      <span
-                        className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${QA_COLOR[t.qaStatus] || "text-muted-foreground"}`}
-                      >
-                        {t.qaStatus === "waiting"
-                          ? "Waiting"
-                          : t.qaStatus === "passed"
-                            ? "Pass"
-                            : t.qaStatus === "failed"
-                              ? "Fail"
-                              : "—"}
-                      </span>
-                    ) : (
+                    {isAdmin || isLeader ? (
                       <select
                         value={t.qaStatus}
                         onClick={(e) => e.stopPropagation()}
@@ -615,6 +601,18 @@ function TasksPage() {
                           </option>
                         ))}
                       </select>
+                    ) : (
+                      <span
+                        className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${QA_COLOR[t.qaStatus] || "text-muted-foreground"}`}
+                      >
+                        {t.qaStatus === "waiting"
+                          ? "Waiting"
+                          : t.qaStatus === "passed"
+                            ? "Pass"
+                            : t.qaStatus === "failed"
+                              ? "Fail"
+                              : "—"}
+                      </span>
                     )}
                   </Td>
                   <Td>
@@ -924,7 +922,7 @@ function TasksPage() {
                   <div className="text-[10px] font-mono uppercase text-muted-foreground mb-1">
                     Developer
                   </div>
-                  {isSuperAdmin ? (
+                  {isAdmin || isLeader ? (
                     <select
                       value={selectedTask.developer}
                       onChange={(e) => updateTask(selectedTask.id, { developer: e.target.value })}
@@ -1107,7 +1105,7 @@ function TasksPage() {
                     value={selectedTask.startDate || ""}
                     onChange={(e) => updateTask(selectedTask.id, { startDate: e.target.value })}
                     className="w-full px-3 py-1.5 rounded-md bg-surface-2 border border-border text-sm focus:outline-none focus:border-primary"
-                    readOnly={!isSuperAdmin}
+                    readOnly={!(isAdmin || isLeader)}
                   />
                 </div>
                 <div>
@@ -1119,7 +1117,7 @@ function TasksPage() {
                     value={selectedTask.dueDate || ""}
                     onChange={(e) => updateTask(selectedTask.id, { dueDate: e.target.value })}
                     className={`w-full px-3 py-1.5 rounded-md bg-surface-2 border border-border text-sm focus:outline-none focus:border-primary ${selectedTask.dueDate && selectedTask.dueDate < new Date().toISOString().slice(0, 10) && selectedTask.status !== "done" ? "text-destructive font-bold" : ""}`}
-                    readOnly={!isSuperAdmin}
+                    readOnly={!(isAdmin || isLeader)}
                   />
                 </div>
                 <div>
@@ -1131,7 +1129,7 @@ function TasksPage() {
                     value={selectedTask.completedAt || ""}
                     onChange={(e) => updateTask(selectedTask.id, { completedAt: e.target.value })}
                     className="w-full px-3 py-1.5 rounded-md bg-surface-2 border border-border text-sm focus:outline-none focus:border-primary"
-                    readOnly={!isSuperAdmin}
+                    readOnly={!(isAdmin || isLeader)}
                   />
                 </div>
               </div>
@@ -1165,7 +1163,7 @@ function TasksPage() {
               </div>
             </div>
             <div className="flex justify-between px-5 py-4 border-t border-border">
-              {isSuperAdmin && (
+              {isAdmin && (
                 <button
                   onClick={() => {
                     removeTask(selectedTask.id);

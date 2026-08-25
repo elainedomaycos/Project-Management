@@ -15,6 +15,7 @@ import { Route as ArchiveRouteImport } from './routes/archive'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ClientRouteImport } from './routes/client'
 import { Route as CredentialsRouteImport } from './routes/credentials'
+import { Route as DefenseRouteImport } from './routes/defense'
 import { Route as DeveloperRouteImport } from './routes/developer'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as QaRouteImport } from './routes/qa'
@@ -51,6 +52,11 @@ const CredentialsRoute = CredentialsRouteImport.update({
   path: '/credentials',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DefenseRoute = DefenseRouteImport.update({
+  id: '/defense',
+  path: '/defense',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DeveloperRoute = DeveloperRouteImport.update({
   id: '/developer',
   path: '/developer',
@@ -84,6 +90,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/client': typeof ClientRoute
   '/credentials': typeof CredentialsRoute
+  '/defense': typeof DefenseRoute
   '/developer': typeof DeveloperRoute
   '/profile': typeof ProfileRoute
   '/qa': typeof QaRoute
@@ -97,6 +104,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/client': typeof ClientRoute
   '/credentials': typeof CredentialsRoute
+  '/defense': typeof DefenseRoute
   '/developer': typeof DeveloperRoute
   '/profile': typeof ProfileRoute
   '/qa': typeof QaRoute
@@ -111,6 +119,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/client': typeof ClientRoute
   '/credentials': typeof CredentialsRoute
+  '/defense': typeof DefenseRoute
   '/developer': typeof DeveloperRoute
   '/profile': typeof ProfileRoute
   '/qa': typeof QaRoute
@@ -126,6 +135,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/client'
     | '/credentials'
+    | '/defense'
     | '/developer'
     | '/profile'
     | '/qa'
@@ -139,6 +149,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/client'
     | '/credentials'
+    | '/defense'
     | '/developer'
     | '/profile'
     | '/qa'
@@ -152,6 +163,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/client'
     | '/credentials'
+    | '/defense'
     | '/developer'
     | '/profile'
     | '/qa'
@@ -166,6 +178,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   ClientRoute: typeof ClientRoute
   CredentialsRoute: typeof CredentialsRoute
+  DefenseRoute: typeof DefenseRoute
   DeveloperRoute: typeof DeveloperRoute
   ProfileRoute: typeof ProfileRoute
   QaRoute: typeof QaRoute
@@ -217,6 +230,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CredentialsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/defense': {
+      id: '/defense'
+      path: '/defense'
+      fullPath: '/defense'
+      preLoaderRoute: typeof DefenseRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/developer': {
       id: '/developer'
       path: '/developer'
@@ -262,6 +282,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   ClientRoute: ClientRoute,
   CredentialsRoute: CredentialsRoute,
+  DefenseRoute: DefenseRoute,
   DeveloperRoute: DeveloperRoute,
   ProfileRoute: ProfileRoute,
   QaRoute: QaRoute,

@@ -33,17 +33,15 @@ DO $$ BEGIN
 EXCEPTION
   WHEN duplicate_object THEN NULL;
 END $$;
-
 -- Realtime so adds/removes appear instantly for everyone
-DO $$ BEGIN
+DO $$
+BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.credentials;
 EXCEPTION
   WHEN duplicate_object THEN NULL;
 END $$;
 
-INSERT INTO public.credentials (id, type, service, username, key, value, url, description, created_at) VALUES
-  ('groq', 'api', 'Groq', NULL, 'GROQ_API_KEY', 'gsk_••••••••••••••••', 'https://console.groq.com', 'Llama 3.3 70B for AI Scrum features', '2026-06-20'),
-  ('supabase', 'database', 'Supabase', NULL, 'SUPABASE_URL', 'https://jiiecdlxxzzskxcbfepi.supabase.co', NULL, 'Project database and auth', '2026-06-15'),
-  ('smtp', 'login', 'SMTP Server', 'noreply@sprint.app', 'SMTP_PASSWORD', '••••••••••••', 'https://mail.example.com', 'Email sending for notifications', '2026-06-18'),
-  ('github', 'api', 'GitHub', NULL, 'GITHUB_TOKEN', 'ghp_••••••••••••••••', 'https://github.com', 'Repository access', '2026-06-18')
-ON CONFLICT (id) DO NOTHING;
+-- NOTE: seed rows from the startup project were removed — they pointed at the
+-- old Supabase instance and contained placeholder keys. Add real entries via
+-- the Credentials page in-app.
+

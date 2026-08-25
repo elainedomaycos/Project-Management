@@ -3,7 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { readCache, writeCache } from "@/lib/local-cache";
 import type { User } from "@supabase/supabase-js";
 
-export type UserRole = "super_admin" | "developer" | "qa";
+// Capstone hierarchy: admin (block coordinator) > leader > developer > viewer.
+// Adviser is a parallel reviewer role scoped to assigned projects.
+export type UserRole = "admin" | "adviser" | "leader" | "developer" | "viewer";
 
 export type Profile = {
   id: string;
@@ -13,7 +15,9 @@ export type Profile = {
   role: UserRole;
 };
 
-const SUPER_ADMIN_EMAILS = [
+// Bootstrap allowlist — mirrors the DB-side is_admin_email() helper and the
+// `admin_emails` settings key. Keep in sync with src/supabase/migrations/.
+const ADMIN_EMAILS = [
   "edomaycos@gmail.com",
   "abellajoshua18@gmail.com",
   "allenmartillan715@gmail.com",
@@ -28,9 +32,9 @@ type AuthContextType = {
   signUp: (email: string, password: string, name: string) => Promise<string | null>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<string | null>;
-  isSuperAdmin: boolean;
-  isDeveloper: boolean;
-  isQa: boolean;
+  isAdmin: boolean;
+  isLeader: boolean;
+  isViewer: boolean;
 };
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -184,37 +188,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.warn("[Auth] profile query error:", error.message);
     }
 
-    const isSuper = SUPER_ADMIN_EMAILS.includes(email.toLowerCase());
+    const isAdminEmail = ADMIN_EMAILS.includes(email.toLowerCase());
     let finalProfile: Profile;
 
     if (data) {
       const authName = user?.user_metadata?.display_name || user?.user_metadata?.full_name || "";
       const profileName = data.display_name || authName || data.name || email.split("@")[0];
-      if (isSuper && data.role !== "super_admin") {
+      // Self-heal allowlisted coordinators to `admin` (DB trigger permits this
+      // via is_admin_email even when the row isn't admin yet).
+      if (isAdminEmail && data.role !== "admin") {
         finalProfile = {
           ...data,
           name: profileName,
           display_name: profileName,
-          role: "super_admin" as const,
+          role: "admin" as const,
         } as Profile;
         await db()
           .from("profiles")
-          .upsert({ id: userId, display_name: profileName, role: "super_admin", email });
+          .upsert({ id: userId, display_name: profileName, role: "admin", email });
       } else {
+        const rawRole = data.role as UserRole | undefined;
+        const role: UserRole =
+          rawRole === "admin" ||
+          rawRole === "adviser" ||
+          rawRole === "leader" ||
+          rawRole === "viewer"
+            ? rawRole
+            : "developer";
         finalProfile = {
           ...data,
           name: profileName,
           display_name: profileName,
-          role: (data.role || "developer") as UserRole,
+          role,
         } as Profile;
         if (!data.display_name || data.display_name.trim() === "") {
           await db().from("profiles").upsert({ id: userId, display_name: profileName });
         }
       }
     } else {
-      let role: UserRole = isSuper ? "super_admin" : "developer";
+      let role: UserRole = isAdminEmail ? "admin" : "developer";
       let inviteName = "";
-      if (!isSuper) {
+      if (!isAdminEmail) {
         try {
           const { data: invite } = await db()
             .from("invitations")
@@ -261,17 +275,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       if (error) return error.message;
       if (data.user) {
-        const isSuper = SUPER_ADMIN_EMAILS.includes(email.toLowerCase());
-        let role: UserRole = isSuper ? "super_admin" : "developer";
+        const isAdminEmail = ADMIN_EMAILS.includes(email.toLowerCase());
+        let role: UserRole = isAdminEmail ? "admin" : "developer";
         let profileName = name;
-        if (!isSuper) {
+        if (!isAdminEmail) {
           const { data: invite } = await db()
             .from("invitations")
             .select("role, name")
             .eq("email", email.toLowerCase())
             .maybeSingle();
           if (invite) {
-            role = invite.role as UserRole;
+            const inviteRole = invite.role as UserRole;
+            role =
+              inviteRole === "admin" ||
+              inviteRole === "adviser" ||
+              inviteRole === "leader" ||
+              inviteRole === "viewer"
+                ? inviteRole
+                : "developer";
             profileName = invite.name;
           }
         }
@@ -287,8 +308,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .from("profiles")
           .upsert({ id: data.user.id, display_name: displayName, role, email });
         try {
-          if (role === "developer" || role === "qa") {
-            const key = role === "developer" ? "developers" : "qa_users";
+          if (role === "developer") {
+            const key = "developers";
             const { data: existing } = await db()
               .from("settings")
               .select("value")
@@ -342,9 +363,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signUp,
     signOut,
     resetPassword,
-    isSuperAdmin: profile?.role === "super_admin",
-    isDeveloper: profile?.role === "developer",
-    isQa: profile?.role === "qa",
+    isAdmin: profile?.role === "admin",
+    isLeader: profile?.role === "leader",
+    isViewer: profile?.role === "viewer",
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

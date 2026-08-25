@@ -34,9 +34,10 @@ const profileSchema = z.object({
 type ProfileForm = z.infer<typeof profileSchema>;
 
 const ROLE_LABELS: Record<string, string> = {
-  super_admin: "Super Admin",
-  developer: "Developer",
-  qa: "QA",
+  admin: "Block Coordinator",
+  leader: "Group Leader",
+  developer: "Member",
+  viewer: "Viewer",
 };
 
 function ProfilePage() {

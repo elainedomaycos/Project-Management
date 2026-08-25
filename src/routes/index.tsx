@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { PageHeader } from "@/components/console";
 import { useProject } from "@/lib/project-context";
+import { HEALTH_META } from "@/lib/health";
 import {
   PieChart,
   Pie,
@@ -251,6 +252,7 @@ function Dashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {displayProjects.map((p) => {
               const a = getAnalytics(p.id);
+              const health = HEALTH_META[p.healthStatus] ?? HEALTH_META.on_track;
               return (
                 <div
                   key={p.id}
@@ -259,7 +261,21 @@ function Dashboard() {
                 >
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-bold">{p.name}</h3>
+                    <span
+                      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[9px] font-mono font-bold ${health.chip}`}
+                      title={`Health: ${health.label}${p.healthSource === "manual" ? " (manually set)" : " (auto)"}`}
+                    >
+                      <span className={`size-1.5 rounded-full ${health.dot}`} />
+                      {health.label.toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between mb-3">
                     <span className="text-[10px] font-mono text-muted-foreground">{p.prefix}</span>
+                    {p.finalDefenseDate && (
+                      <span className="text-[10px] text-muted-foreground">
+                        Defense: {p.finalDefenseDate}
+                      </span>
+                    )}
                   </div>
                   <div className="mb-4">
                     <div className="flex items-center justify-between text-xs mb-1">
