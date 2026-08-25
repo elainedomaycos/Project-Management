@@ -2,14 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/console";
 import { useProject } from "@/lib/project-context";
 import { HEALTH_META } from "@/lib/health";
+import { supabase } from "@/integrations/supabase/client";
+import { useState, useEffect } from "react";
 import {
   PieChart,
   Pie,
   Cell,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
@@ -18,6 +16,8 @@ import {
   CheckCircle2,
   AlertTriangle,
   Flame,
+  Shield,
+  Target,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -38,76 +38,107 @@ const STATUS_COLORS = {
 };
 const STATUS_LABELS = { pending: "Pending", doing: "In Progress", qa: "QA Review", done: "Done" };
 
-function ProgressRing({
-  pct,
-  size = 200,
-  strokeWidth = 10,
-}: {
-  pct: number;
-  size?: number;
-  strokeWidth?: number;
-}) {
+const HEALTH_COLORS: Record<string, string> = {
+  on_track: "#22c55e",
+  at_risk: "#eab308",
+  behind: "#ef4444",
+};
+
+function SemiGauge({ pct, size = 200 }: { pct: number; size?: number }) {
+  const strokeWidth = 14;
   const r = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * r;
+  const circumference = Math.PI * r;
   const offset = circumference - (pct / 100) * circumference;
+
+  const getColor = (p: number) => {
+    if (p >= 70) return "var(--color-success)";
+    if (p >= 40) return "var(--color-warning)";
+    return "var(--color-destructive)";
+  };
+
   return (
-    <svg width={size} height={size} className="shrink-0">
-      <defs>
-        <linearGradient id="progressGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="var(--color-primary)" stopOpacity="0.2" />
-          <stop offset="100%" stopColor="var(--color-primary)" />
-        </linearGradient>
-      </defs>
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={strokeWidth}
-        className="text-white/5"
-      />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        fill="none"
-        stroke="url(#progressGrad)"
-        strokeWidth={strokeWidth}
-        strokeDasharray={circumference}
-        strokeDashoffset={offset}
-        strokeLinecap="round"
-        className="transition-all duration-1000 ease-out"
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-      />
-      <text
-        x="50%"
-        y="46%"
-        dominantBaseline="central"
-        textAnchor="middle"
-        className="fill-foreground"
-        fontSize={size * 0.2}
-        fontWeight="800"
-      >
-        {pct}%
-      </text>
-      <text
-        x="50%"
-        y="62%"
-        dominantBaseline="central"
-        textAnchor="middle"
-        className="fill-muted-foreground"
-        fontSize={size * 0.065}
-        fontFamily="var(--font-mono)"
-      >
-        COMPLETE
-      </text>
-    </svg>
+    <div className="relative" style={{ width: size, height: size / 2 + 24 }}>
+      <svg width={size} height={size / 2 + 24} className="block">
+        <defs>
+          <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor={getColor(pct)} stopOpacity="0.25" />
+            <stop offset="100%" stopColor={getColor(pct)} />
+          </linearGradient>
+        </defs>
+        <path
+          d={`M ${strokeWidth / 2} ${size / 2} A ${r} ${r} 0 0 1 ${size - strokeWidth / 2} ${size / 2}`}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          className="text-white/5"
+        />
+        <path
+          d={`M ${strokeWidth / 2} ${size / 2} A ${r} ${r} 0 0 1 ${size - strokeWidth / 2} ${size / 2}`}
+          fill="none"
+          stroke="url(#gaugeGrad)"
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          className="transition-all duration-1000 ease-out"
+        />
+        <text
+          x="50%"
+          y={size / 2 - 6}
+          dominantBaseline="central"
+          textAnchor="middle"
+          className="fill-foreground"
+          fontSize={size * 0.18}
+          fontWeight="800"
+        >
+          {pct}%
+        </text>
+        <text
+          x="50%"
+          y={size / 2 + 14}
+          dominantBaseline="central"
+          textAnchor="middle"
+          className="fill-muted-foreground"
+          fontSize={size * 0.055}
+          fontFamily="var(--font-mono)"
+        >
+          READINESS
+        </text>
+      </svg>
+    </div>
   );
 }
 
 function Dashboard() {
-  const { projects, tasks, currentProject } = useProject();
+  const { projects, tasks, currentProject, getAnalytics } = useProject();
+
+  const [deliverableStats, setDeliverableStats] = useState({
+    total: 0,
+    completed: 0,
+  });
+
+  useEffect(() => {
+    const pid = currentProject?.id;
+    if (!pid) {
+      setDeliverableStats({ total: 0, completed: 0 });
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any)
+        .from("defense_deliverables")
+        .select("status")
+        .eq("project_id", pid);
+      if (cancelled || error || !data) return;
+      setDeliverableStats({
+        total: data.length,
+        completed: data.filter((d: { status: string }) => d.status === "submitted").length,
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [currentProject?.id]);
 
   const viewTasks = currentProject ? tasks.filter((t) => t.projectId === currentProject.id) : tasks;
   const totalTasks = viewTasks.length;
@@ -115,7 +146,26 @@ function Dashboard() {
   const overdue = viewTasks.filter(
     (t) => t.dueDate && t.dueDate < new Date().toISOString().slice(0, 10) && t.status !== "done",
   ).length;
-  const overallProgress = totalTasks > 0 ? Math.round((totalDone / totalTasks) * 100) : 0;
+
+  // Block Readiness: (done tasks + completed deliverables) / (all tasks + all deliverables)
+  const totalUnits = totalTasks + deliverableStats.total;
+  const doneUnits = totalDone + deliverableStats.completed;
+  const blockReadiness = totalUnits > 0 ? Math.round((doneUnits / totalUnits) * 100) : 0;
+
+  // Project Health distribution
+  const healthCounts = projects.reduce(
+    (acc, p) => {
+      acc[p.healthStatus] = (acc[p.healthStatus] || 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
+  const healthData = [
+    { name: "On Track", value: healthCounts["on_track"] || 0, color: HEALTH_COLORS.on_track },
+    { name: "At Risk", value: healthCounts["at_risk"] || 0, color: HEALTH_COLORS.at_risk },
+    { name: "Behind", value: healthCounts["behind"] || 0, color: HEALTH_COLORS.behind },
+  ];
+  const totalProjects = projects.length;
 
   const statusData = ["pending", "doing", "qa", "done"].map((s) => ({
     name: STATUS_LABELS[s as keyof typeof STATUS_LABELS],
@@ -164,19 +214,80 @@ function Dashboard() {
       />
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {/* Hero: Progress Ring + KPIs */}
+        {/* Row 1: Block Readiness + Project Health + KPIs */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Large Progress Ring */}
-          <div className="bg-card border border-border rounded-2xl p-8 flex flex-col items-center justify-center relative overflow-hidden">
+          {/* Block Readiness Gauge */}
+          <div className="bg-card border border-border rounded-2xl p-6 flex flex-col items-center justify-center relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
-            <ProgressRing pct={overallProgress} />
-            <p className="text-[10px] font-mono text-muted-foreground mt-4 uppercase tracking-widest">
-              {currentProject ? currentProject.name : "All Projects"}
+            <SemiGauge pct={blockReadiness} />
+            <p className="text-[10px] font-mono text-muted-foreground mt-2 uppercase tracking-widest">
+              {currentProject ? `${currentProject.name}` : "All Projects"}
             </p>
+            <div className="flex items-center gap-4 mt-3 text-[10px] font-mono text-muted-foreground">
+              <span>Tasks: {totalDone}/{totalTasks}</span>
+              <span className="text-border">|</span>
+              <span>Deliverables: {deliverableStats.completed}/{deliverableStats.total}</span>
+            </div>
+          </div>
+
+          {/* Project Health Summary */}
+          <div className="bg-card border border-border rounded-2xl p-6 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-success/5 via-transparent to-destructive/5 pointer-events-none" />
+            <h2 className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest mb-5 relative">
+              <Shield className="inline size-3 mr-1.5 -mt-0.5" />
+              Project Health
+            </h2>
+            {totalProjects === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8 relative">No projects yet.</p>
+            ) : (
+              <div className="flex items-center gap-6 relative">
+                <ResponsiveContainer width={140} height={140}>
+                  <PieChart>
+                    <Pie
+                      data={healthData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={40}
+                      outerRadius={60}
+                      paddingAngle={4}
+                      dataKey="value"
+                    >
+                      {healthData.map((entry, i) => (
+                        <Cell key={i} fill={entry.color} stroke="transparent" />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        background: "var(--color-card)",
+                        border: "1px solid var(--color-border)",
+                        borderRadius: "10px",
+                        fontSize: "12px",
+                        fontFamily: "var(--font-mono)",
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="space-y-3">
+                  {healthData.map((h) => {
+                    const meta = HEALTH_META[h.name === "On Track" ? "on_track" : h.name === "At Risk" ? "at_risk" : "behind"];
+                    return (
+                      <div key={h.name} className="flex items-center gap-2.5 text-xs">
+                        <span className={`size-2.5 rounded-full ${meta.dot}`} />
+                        <span className="text-muted-foreground w-20">{h.name}</span>
+                        <span className="font-mono font-bold">{h.value}</span>
+                        <span className="text-[10px] text-muted-foreground/50">
+                          ({totalProjects > 0 ? Math.round((h.value / totalProjects) * 100) : 0}%)
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* KPI Column */}
-          <div className="lg:col-span-2 grid grid-cols-2 gap-4">
+          <div className="lg:col-span-2 grid grid-cols-4 gap-4">
             <div className="bg-card border border-border rounded-2xl p-5 relative overflow-hidden group hover:border-primary/30 transition-colors">
               <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
               <div className="flex items-center gap-3 relative">
@@ -184,8 +295,8 @@ function Dashboard() {
                   <ListChecks className="size-5" />
                 </div>
                 <div>
-                  <div className="text-3xl font-extrabold tracking-tight">{totalTasks}</div>
-                  <div className="text-[10px] font-mono text-muted-foreground uppercase">Total Tasks</div>
+                  <div className="text-2xl font-extrabold tracking-tight">{totalTasks}</div>
+                  <div className="text-[10px] font-mono text-muted-foreground uppercase">Tasks</div>
                 </div>
               </div>
             </div>
@@ -197,7 +308,7 @@ function Dashboard() {
                   <CheckCircle2 className="size-5" />
                 </div>
                 <div>
-                  <div className="text-3xl font-extrabold tracking-tight text-success">{totalDone}</div>
+                  <div className="text-2xl font-extrabold tracking-tight text-success">{totalDone}</div>
                   <div className="text-[10px] font-mono text-muted-foreground uppercase">Completed</div>
                 </div>
               </div>
@@ -210,7 +321,7 @@ function Dashboard() {
                   <Flame className="size-5" />
                 </div>
                 <div>
-                  <div className="text-3xl font-extrabold tracking-tight text-warning">
+                  <div className="text-2xl font-extrabold tracking-tight text-warning">
                     {viewTasks.filter((t) => t.status === "doing").length}
                   </div>
                   <div className="text-[10px] font-mono text-muted-foreground uppercase">In Progress</div>
@@ -225,7 +336,7 @@ function Dashboard() {
                   <AlertTriangle className="size-5" />
                 </div>
                 <div>
-                  <div className="text-3xl font-extrabold tracking-tight text-destructive">
+                  <div className="text-2xl font-extrabold tracking-tight text-destructive">
                     {overdue > 0 ? overdue : 0}
                   </div>
                   <div className="text-[10px] font-mono text-muted-foreground uppercase">Overdue</div>
@@ -235,7 +346,7 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* Charts Row */}
+        {/* Row 2: Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Status Donut */}
           <div className="bg-card border border-border rounded-2xl p-6">
@@ -374,66 +485,6 @@ function Dashboard() {
             )}
           </div>
         </div>
-
-        {/* Developer Workload Bar Chart */}
-        <div className="bg-card border border-border rounded-2xl p-6">
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">
-              Developer Workload
-            </h2>
-            <div className="flex items-center gap-4 text-[10px] font-mono text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <span className="size-2 rounded-full bg-success" /> Done
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="size-2 rounded-full bg-white/20" /> Remaining
-              </span>
-            </div>
-          </div>
-          {devData.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-12">No developer data yet.</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={devData} barGap={2} barCategoryGap="25%">
-                <XAxis
-                  dataKey="name"
-                  tick={{ fontSize: 10, fill: "var(--color-muted-foreground)", fontFamily: "var(--font-mono)" }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fontSize: 10, fill: "var(--color-muted-foreground)", fontFamily: "var(--font-mono)" }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: "var(--color-card)",
-                    border: "1px solid var(--color-border)",
-                    borderRadius: "10px",
-                    fontSize: "12px",
-                    fontFamily: "var(--font-mono)",
-                  }}
-                />
-                <Bar
-                  dataKey="done"
-                  name="Done"
-                  stackId="a"
-                  fill="var(--color-success)"
-                  radius={[4, 4, 0, 0]}
-                />
-                <Bar
-                  dataKey="pending"
-                  name="Remaining"
-                  stackId="a"
-                  fill="rgba(255,255,255,0.08)"
-                  radius={[4, 4, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-
 
       </div>
     </>
