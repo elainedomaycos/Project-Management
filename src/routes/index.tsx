@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/console";
 import { useProject } from "@/lib/project-context";
-import { HEALTH_META } from "@/lib/health";
+import { HEALTH_META, computeAutoHealth, type HealthDeliverable } from "@/lib/health";
 import { supabase } from "@/integrations/supabase/client";
 import { useState, useEffect } from "react";
 import {
@@ -118,27 +118,39 @@ function Dashboard() {
     completed: 0,
   });
 
+  // Fetch deliverables for all projects to compute health dynamically
+  const [allDeliverables, setAllDeliverables] = useState<Map<string, HealthDeliverable[]>>(new Map());
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any)
+        .from("defense_deliverables")
+        .select("project_id, status, due_date");
+      if (cancelled || error || !data) return;
+      const map = new Map<string, HealthDeliverable[]>();
+      for (const row of data as { project_id: string; status: string; due_date: string | null }[]) {
+        if (!map.has(row.project_id)) map.set(row.project_id, []);
+        map.get(row.project_id)!.push({ status: row.status, due_date: row.due_date });
+      }
+      setAllDeliverables(map);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   useEffect(() => {
     const pid = currentProject?.id;
     if (!pid) {
       setDeliverableStats({ total: 0, completed: 0 });
       return;
     }
-    let cancelled = false;
-    void (async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
-        .from("defense_deliverables")
-        .select("status")
-        .eq("project_id", pid);
-      if (cancelled || error || !data) return;
-      setDeliverableStats({
-        total: data.length,
-        completed: data.filter((d: { status: string }) => d.status === "submitted").length,
-      });
-    })();
-    return () => { cancelled = true; };
-  }, [currentProject?.id]);
+    const dels = allDeliverables.get(pid) ?? [];
+    setDeliverableStats({
+      total: dels.length,
+      completed: dels.filter((d) => d.status === "submitted").length,
+    });
+  }, [currentProject?.id, allDeliverables]);
 
   const viewTasks = currentProject ? tasks.filter((t) => t.projectId === currentProject.id) : tasks;
   const totalTasks = viewTasks.length;
@@ -153,13 +165,14 @@ function Dashboard() {
   const blockReadiness = totalUnits > 0 ? Math.round((doneUnits / totalUnits) * 100) : 0;
 
   // Project Health distribution
-  const healthCounts = projects.reduce(
-    (acc, p) => {
-      acc[p.healthStatus] = (acc[p.healthStatus] || 0) + 1;
-      return acc;
-    },
-    {} as Record<string, number>,
-  );
+  // Compute health for each project from tasks + deliverables
+  const healthCounts: Record<string, number> = { on_track: 0, at_risk: 0, behind: 0 };
+  for (const p of projects) {
+    const pTasks = tasks.filter((t) => t.projectId === p.id);
+    const pDels = allDeliverables.get(p.id) ?? [];
+    const computed = computeAutoHealth(pDels, p.finalDefenseDate, { tasks: pTasks });
+    healthCounts[computed] = (healthCounts[computed] || 0) + 1;
+  }
   const healthData = [
     { name: "On Track", value: healthCounts["on_track"] || 0, color: HEALTH_COLORS.on_track },
     { name: "At Risk", value: healthCounts["at_risk"] || 0, color: HEALTH_COLORS.at_risk },
