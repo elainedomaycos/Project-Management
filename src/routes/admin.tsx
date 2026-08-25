@@ -229,7 +229,6 @@ function AdminPage() {
                               className="px-2 py-1 rounded bg-background border border-border text-xs font-medium focus:outline-none focus:border-primary"
                             >
                               <option value="admin">Block Coordinator</option>
-                              <option value="adviser">Adviser</option>
                               <option value="leader">Group Leader</option>
                               <option value="developer">Member</option>
                               <option value="viewer">Viewer</option>
