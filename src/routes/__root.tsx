@@ -600,7 +600,7 @@ function TagDropdown({
 function ProjectSelector() {
   const { projects, currentProject, setCurrentProject, addProject, updateProject, archiveProject } =
     useProject();
-  const { isAdmin } = useAuth();
+  const { isAdmin, isLeader } = useAuth();
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState<{
     name: string;
@@ -664,14 +664,16 @@ function ProjectSelector() {
         </select>
         <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 size-3 text-muted-foreground pointer-events-none" />
       </div>
-      {isAdmin && (
+      {(isAdmin || (isLeader && currentProject)) && (
         <div className="flex gap-1">
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex-1 px-1.5 py-0.5 rounded text-[9px] font-mono uppercase text-primary border border-primary/30 hover:bg-primary/5 transition-colors"
-          >
-            + New
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex-1 px-1.5 py-0.5 rounded text-[9px] font-mono uppercase text-primary border border-primary/30 hover:bg-primary/5 transition-colors"
+            >
+              + New
+            </button>
+          )}
           {currentProject && (
             <button
               onClick={openManage}
@@ -681,7 +683,7 @@ function ProjectSelector() {
               Manage
             </button>
           )}
-          {projects.length > 1 && currentProject && (
+          {isAdmin && projects.length > 1 && currentProject && (
             <button
               onClick={() => archiveProject(currentProject.id)}
               className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-mono uppercase text-warning border border-warning/30 hover:bg-warning/5 transition-colors"
