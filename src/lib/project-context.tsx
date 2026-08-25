@@ -585,8 +585,18 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         end_users: data.endUsers,
         modules: data.modules,
       })
-      .then(() => notify("success", "Project created"))
-      .catch(() => notify("error", "Failed to create project"));
+      .then(({ error }: { error: unknown }) => {
+        if (error) {
+          console.error("Failed to create project:", error);
+          notify("error", "Failed to create project");
+        } else {
+          notify("success", "Project created");
+        }
+      })
+      .catch((e: unknown) => {
+        console.error("Failed to create project:", e);
+        notify("error", "Failed to create project");
+      });
   }
 
   function updateProject(
