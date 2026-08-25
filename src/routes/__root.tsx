@@ -8,7 +8,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
   LayoutDashboard,
   ListChecks,
@@ -228,7 +228,7 @@ function AuthGate({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isAuthPage = pathname === "/auth";
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (loading) return;
     if (!user && !isAuthPage) {
       router.navigate({ to: "/auth" });
@@ -237,16 +237,13 @@ function AuthGate({ children }: { children: ReactNode }) {
     }
   }, [user, loading, recoveryMode, isAuthPage, router]);
 
-  if (loading) {
+  if (loading || (!user && !isAuthPage) || (user && isAuthPage && !recoveryMode)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-sm text-muted-foreground animate-pulse">Loading...</div>
       </div>
     );
   }
-
-  if (!user && !isAuthPage) return null;
-  if (user && isAuthPage && !recoveryMode) return null;
 
   return <>{children}</>;
 }
