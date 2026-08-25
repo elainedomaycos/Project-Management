@@ -347,6 +347,33 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     load();
   }, [profile?.id]);
 
+  // On first load (no saved selection), default to the user's assigned project
+  useEffect(() => {
+    if (loading || !profile?.id || allProjects.length === 0) return;
+    const saved = localStorage.getItem("selected-project-id");
+    if (saved) return; // user already picked a project
+    let cancelled = false;
+    (async () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data } = await (db() as any)
+          .from("group_memberships")
+          .select("project_id")
+          .eq("user_id", profile.id)
+          .maybeSingle();
+        if (cancelled || !data?.project_id) return;
+        const assigned = allProjects.find((p) => p.id === data.project_id);
+        if (assigned && !assigned.archivedAt) {
+          setCurrentProjectState(assigned);
+          localStorage.setItem("selected-project-id", assigned.id);
+        }
+      } catch {
+        /* ignore — no membership or table missing */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [loading, profile?.id, allProjects.length]);
+
   // Live-update tasks from realtime changes so edits by other users show up immediately
   useEffect(() => {
     const channel = supabase
