@@ -307,15 +307,9 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     return !proj?.archivedAt;
   });
 
-  // Load from Supabase on mount
+  // Load from Supabase — re-fetch when the user first becomes available
+  // (on mount the user may not be authenticated yet, so RLS returns nothing)
   useEffect(() => {
-    // Wipe any stale startup-repo cache from localStorage
-    try {
-      localStorage.removeItem("tt:v1:project-data");
-    } catch {
-      /* ignore */
-    }
-
     async function load() {
       const cached = readCache<CachedProjectData>("project-data");
       if (cached) {
@@ -327,7 +321,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       }
       try {
         const [projRes, taskRes, profilesRes] = await Promise.all([
-          db().from("projects").select("*"),
+          db().from("projects").select("*").order("name"),
           db().from("tasks").select("*"),
           db().from("profiles").select("display_name, role"),
         ]);
@@ -351,7 +345,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       }
     }
     load();
-  }, []);
+  }, [profile?.id]);
 
   // Live-update tasks from realtime changes so edits by other users show up immediately
   useEffect(() => {

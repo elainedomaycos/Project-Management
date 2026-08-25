@@ -86,6 +86,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+  ssr: false,
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -228,19 +229,80 @@ function AuthGate({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isAuthPage = pathname === "/auth";
 
+  // After login, show the onboarding screen for at least 3 seconds
+  const [onboarding, setOnboarding] = useState(false);
+  const onboardingStart = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (user && !loading) {
+      // Just became authenticated — start onboarding if not already running
+      if (!onboardingStart.current) {
+        onboardingStart.current = Date.now();
+        setOnboarding(true);
+        const elapsed = Date.now() - onboardingStart.current;
+        const remaining = Math.max(0, 3000 - elapsed);
+        const t = setTimeout(() => {
+          setOnboarding(false);
+          onboardingStart.current = null;
+        }, remaining);
+        return () => clearTimeout(t);
+      }
+    } else if (!user) {
+      onboardingStart.current = null;
+      setOnboarding(false);
+    }
+  }, [user, loading]);
+
   useLayoutEffect(() => {
     if (loading) return;
     if (!user && !isAuthPage) {
       router.navigate({ to: "/auth" });
-    } else if (user && isAuthPage && !recoveryMode) {
+    } else if (user && isAuthPage && !recoveryMode && !onboarding) {
       router.navigate({ to: "/" });
     }
-  }, [user, loading, recoveryMode, isAuthPage, router]);
+  }, [user, loading, recoveryMode, isAuthPage, router, onboarding]);
 
-  if (loading) {
+  // Fallback: if auth takes too long, redirect to auth page so user isn't stuck
+  const timedOut = useRef(false);
+  useEffect(() => {
+    if (!loading || isAuthPage) return;
+    const t = setTimeout(() => {
+      timedOut.current = true;
+      router.navigate({ to: "/auth" });
+    }, 5000);
+    return () => clearTimeout(t);
+  }, [loading, isAuthPage, router]);
+
+  // Never render the dashboard until we have a confirmed user.
+  if (!isAuthPage && !user && !timedOut.current) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-sm text-muted-foreground animate-pulse">Loading...</div>
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-6">
+        <img src="/logo4.png" alt="Logo" className="size-12 rounded-xl object-cover" />
+        <div className="w-56 space-y-2">
+          <div className="h-1 w-full overflow-hidden rounded-full bg-surface-2">
+            <div className="h-full w-2/5 rounded-full bg-primary animate-[loading_1.4s_ease-in-out_infinite]" />
+          </div>
+          <p className="text-center text-xs text-muted-foreground animate-pulse">
+            Loading...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Post-login onboarding screen
+  if (onboarding) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-6">
+        <img src="/logo4.png" alt="Logo" className="size-12 rounded-xl object-cover" />
+        <div className="w-56 space-y-2">
+          <div className="h-1 w-full overflow-hidden rounded-full bg-surface-2">
+            <div className="h-full w-2/5 rounded-full bg-primary animate-[loading_1.4s_ease-in-out_infinite]" />
+          </div>
+          <p className="text-center text-xs text-muted-foreground animate-pulse">
+            Onboarding in progress...
+          </p>
+        </div>
       </div>
     );
   }
@@ -260,7 +322,7 @@ function AppShell({ pathname, queryClient }: { pathname: string; queryClient: Qu
   const closeNav = () => setMobileNavOpen(false);
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
+    <div className="flex h-screen w-full overflow-hidden bg-background text-foreground animate-[fadeIn_0.4s_ease-out]">
       {/* Mobile top bar */}
       <div className="fixed top-0 inset-x-0 z-40 lg:hidden flex items-center justify-between h-12 px-3 border-b border-border bg-sidebar">
         <div className="flex items-center gap-2">
