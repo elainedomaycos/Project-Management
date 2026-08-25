@@ -49,7 +49,7 @@ function AdminPage() {
     try {
       const [profilesRes, projectsRes, membershipsRes] = await Promise.all([
         supabase.from("profiles").select("*").order("created_at", { ascending: false }),
-        supabase.from("projects").select("id, name").order("name"),
+        supabase.from("projects").select("id, name").is("archived_at", null).order("name"),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (supabase as any).from("group_memberships").select("user_id, project_id, role"),
       ]);
