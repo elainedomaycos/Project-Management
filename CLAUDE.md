@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-A lightweight Scrum/task-tracker app ("Capstone Project Management", forked from a startup's "Project Tracker") built with TanStack Start (React 19, file-based routing), Supabase (Postgres + auth), and Groq (openai/gpt-oss-120b) for AI-assisted Scrum tooling. Fully decoupled from the original startup repo and from Lovable — standalone Vite plugin stack.
+A lightweight Scrum/project management app ("Capstone Project Management", forked from a startup's "Project Tracker") built with TanStack Start (React 19, file-based routing), Supabase (Postgres + auth), and Groq (openai/gpt-oss-120b) for AI-assisted Scrum tooling. Fully decoupled from the original startup repo and from Lovable — standalone Vite plugin stack.
 
 ## Commands
 

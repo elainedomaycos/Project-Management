@@ -90,12 +90,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Task Tracker — Simple Project & Task Management" },
+      { title: "Project Management — Capstone Project Management" },
       {
         name: "description",
         content: "Lightweight task tracking for small teams. No Scrum jargon, just get work done.",
       },
-      { property: "og:title", content: "Task Tracker" },
+      { property: "og:title", content: "Project Management" },
       {
         property: "og:description",
         content: "Simple project and task management for small teams.",
@@ -277,7 +277,7 @@ function AppShell({ pathname, queryClient }: { pathname: string; queryClient: Qu
           <div className="size-6 rounded-md bg-primary text-primary-foreground grid place-items-center font-bold italic text-[11px]">
             TT
           </div>
-          <span className="text-sm font-bold tracking-tight">Task Tracker</span>
+          <span className="text-sm font-bold tracking-tight">Project Management</span>
         </div>
         <NotificationCenter />
       </div>
@@ -289,7 +289,7 @@ function AppShell({ pathname, queryClient }: { pathname: string; queryClient: Qu
             TT
           </div>
           <div className="leading-tight">
-            <div className="text-sm font-bold tracking-tight">Task Tracker</div>
+            <div className="text-sm font-bold tracking-tight">Project Management</div>
             <div className="text-[10px] font-mono text-muted-foreground uppercase">
               v0.2 · console
             </div>
@@ -317,7 +317,7 @@ function AppShell({ pathname, queryClient }: { pathname: string; queryClient: Qu
                 <div className="size-6 rounded-md bg-primary text-primary-foreground grid place-items-center font-bold italic text-[11px]">
                   TT
                 </div>
-                <span className="text-sm font-bold tracking-tight">Task Tracker</span>
+                <span className="text-sm font-bold tracking-tight">Project Management</span>
               </div>
               <button
                 onClick={closeNav}

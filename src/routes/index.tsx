@@ -27,7 +27,7 @@ import {
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Dashboard · Task Tracker" },
+      { title: "Dashboard · Project Management" },
       { name: "description", content: "Project overview and task analytics." },
     ],
   }),
@@ -84,7 +84,7 @@ function Dashboard() {
   return (
     <>
       <PageHeader
-        crumbs={[{ label: "Task Tracker" }, { label: currentProject?.name ?? "Dashboard" }]}
+        crumbs={[{ label: "Project Management" }, { label: currentProject?.name ?? "Dashboard" }]}
         status={{
           label: `${totalTasks} tasks · ${overdue} overdue`,
           tone: overdue > 0 ? "warn" : "info",

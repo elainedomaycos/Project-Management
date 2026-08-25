@@ -19,7 +19,7 @@ import {
 export const Route = createFileRoute("/client")({
   head: () => ({
     meta: [
-      { title: "Client Portal · Task Tracker" },
+      { title: "Client Portal · Project Management" },
       { name: "description", content: "Client project progress view." },
     ],
   }),
@@ -126,7 +126,7 @@ function ClientPage() {
   if (displayProjects.length === 0) {
     return (
       <>
-        <PageHeader crumbs={[{ label: "Task Tracker" }, { label: "Client Portal" }]} />
+        <PageHeader crumbs={[{ label: "Project Management" }, { label: "Client Portal" }]} />
         <div className="flex-1 grid place-items-center p-6">
           <div className="text-center space-y-3">
             <div className="size-16 rounded-full bg-surface-2 border border-border grid place-items-center mx-auto text-muted-foreground">
@@ -145,7 +145,7 @@ function ClientPage() {
   return (
     <>
       <PageHeader
-        crumbs={[{ label: "Task Tracker" }, { label: currentProject?.name ?? "Client Portal" }]}
+        crumbs={[{ label: "Project Management" }, { label: currentProject?.name ?? "Client Portal" }]}
         status={{
           label: `${displayProjects.length} project${displayProjects.length > 1 ? "s" : ""} · ${totalStats.done}/${totalStats.total} tasks done`,
           tone: "info",

@@ -22,8 +22,8 @@ import {
 export const Route = createFileRoute("/tasks")({
   head: () => ({
     meta: [
-      { title: "Tasks · Task Tracker" },
-      { name: "description", content: "Project task tracker table." },
+      { title: "Tasks · Project Management" },
+      { name: "description", content: "Project task table." },
     ],
   }),
   component: TasksPage,
@@ -316,7 +316,7 @@ function TasksPage() {
   return (
     <>
       <PageHeader
-        crumbs={[{ label: "Task Tracker" }, { label: currentProject?.name ?? "All Projects" }]}
+        crumbs={[{ label: "Project Management" }, { label: currentProject?.name ?? "All Projects" }]}
         status={{ label: `${tasks.length} tasks`, tone: "info" }}
         actions={
           (isAdmin || isLeader) && pid ? (

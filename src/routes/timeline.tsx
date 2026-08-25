@@ -33,7 +33,7 @@ import {
 export const Route = createFileRoute("/timeline")({
   head: () => ({
     meta: [
-      { title: "Project Timeline · Task Tracker" },
+      { title: "Project Timeline · Project Management" },
       {
         name: "description",
         content: "AI-generated project timeline and Gantt planning.",

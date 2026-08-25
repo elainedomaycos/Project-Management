@@ -8,7 +8,7 @@ import { CheckCircle2, Clock, ArrowRight, Users, Plus, X, ArrowUpDown } from "lu
 export const Route = createFileRoute("/developer")({
   head: () => ({
     meta: [
-      { title: "Developer · Task Tracker" },
+      { title: "Developer · Project Management" },
       { name: "description", content: "Developer workspace." },
     ],
   }),
@@ -60,7 +60,7 @@ function DeveloperPage() {
   return (
     <>
       <PageHeader
-        crumbs={[{ label: "Task Tracker" }, { label: "Developer" }]}
+        crumbs={[{ label: "Project Management" }, { label: "Developer" }]}
         status={{ label: `${activeTasks.length} active tasks`, tone: "info" }}
         actions={
           !isViewer && (

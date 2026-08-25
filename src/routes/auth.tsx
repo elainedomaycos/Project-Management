@@ -6,8 +6,8 @@ import { supabase } from "@/integrations/supabase/client";
 export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
-      { title: "Sign In · Task Tracker" },
-      { name: "description", content: "Sign in to Task Tracker" },
+      { title: "Sign In · Project Management" },
+      { name: "description", content: "Sign in to Project Management" },
     ],
   }),
   component: AuthPage,
@@ -167,7 +167,7 @@ function AuthPage() {
           <div className="size-10 rounded-xl bg-primary text-primary-foreground grid place-items-center font-bold italic text-lg mx-auto mb-3">
             TT
           </div>
-          <h1 className="text-xl font-bold">Task Tracker</h1>
+          <h1 className="text-xl font-bold">Project Management</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {mode === "login" ? "Sign in to your account" : "Create a new account"}
           </p>

@@ -18,7 +18,7 @@ type ManagedUser = {
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
-    meta: [{ title: "Admin · Task Tracker" }, { name: "description", content: "User management." }],
+    meta: [{ title: "Admin · Project Management" }, { name: "description", content: "User management." }],
   }),
   component: AdminPage,
 });

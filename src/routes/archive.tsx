@@ -6,7 +6,7 @@ import { Archive, RotateCcw, Trash2 } from "lucide-react";
 export const Route = createFileRoute("/archive")({
   head: () => ({
     meta: [
-      { title: "Archive · Task Tracker" },
+      { title: "Archive · Project Management" },
       { name: "description", content: "Restore or permanently delete archived projects." },
     ],
   }),
@@ -19,7 +19,7 @@ function ArchivePage() {
   return (
     <>
       <PageHeader
-        crumbs={[{ label: "Task Tracker" }, { label: "Archive" }]}
+        crumbs={[{ label: "Project Management" }, { label: "Archive" }]}
         status={{ label: `${archivedProjects.length} archived`, tone: "warn" }}
       />
       <div className="p-6">

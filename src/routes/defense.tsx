@@ -28,7 +28,7 @@ import {
 export const Route = createFileRoute("/defense")({
   head: () => ({
     meta: [
-      { title: "Final Defense · Task Tracker" },
+      { title: "Final Defense · Project Management" },
       {
         name: "description",
         content: "Final defense roadmap with deliverables and adviser feedback.",
@@ -502,7 +502,7 @@ function DefensePage() {
     <>
       <PageHeader
         crumbs={[
-          { label: "Task Tracker" },
+          { label: "Project Management" },
           { label: "Final Defense" },
           { label: currentProject.name },
         ]}

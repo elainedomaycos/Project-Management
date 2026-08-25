@@ -9,7 +9,7 @@ import { CheckCircle2, XCircle, AlertTriangle, User, Search, ArrowUpDown } from 
 export const Route = createFileRoute("/qa")({
   head: () => ({
     meta: [
-      { title: "QA Review · Task Tracker" },
+      { title: "QA Review · Project Management" },
       { name: "description", content: "QA review queue." },
     ],
   }),
@@ -104,7 +104,7 @@ function QaPage() {
     <>
       <PageHeader
         crumbs={[
-          { label: "Task Tracker" },
+          { label: "Project Management" },
           { label: currentProject?.name ?? "QA Review · All Projects" },
         ]}
         status={{
