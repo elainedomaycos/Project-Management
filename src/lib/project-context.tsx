@@ -540,7 +540,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  function addProject(data: {
+  async function addProject(data: {
     name: string;
     clientName: string;
     endUsers: string[];
@@ -574,32 +574,31 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     setAllProjects((prev) => [...prev, p]);
     setCurrentProjectState(p);
     localStorage.setItem("selected-project-id", p.id);
-    db()
-      .from("projects")
-      .insert({
-        id,
-        name: data.name,
-        prefix,
-        created_at: p.createdAt,
-        client_name: data.clientName,
-        end_users: data.endUsers,
-        modules: data.modules,
-      })
-      .then(({ error }: { error: unknown }) => {
-        if (error) {
-          console.error("Failed to create project:", error);
-          notify("error", "Failed to create project");
-        } else {
-          notify("success", "Project created");
-        }
-      })
-      .catch((e: unknown) => {
-        console.error("Failed to create project:", e);
-        notify("error", "Failed to create project");
-      });
+    try {
+      const res = await db()
+        .from("projects")
+        .insert({
+          id,
+          name: data.name,
+          prefix,
+          created_at: p.createdAt,
+          client_name: data.clientName || "",
+          end_users: data.endUsers ?? [],
+          modules: data.modules ?? [],
+        });
+      if (res?.error) {
+        console.error("[addProject] Supabase error:", res.error);
+        notify("error", `Failed to create project: ${res.error.message ?? JSON.stringify(res.error)}`);
+      } else {
+        notify("success", "Project created");
+      }
+    } catch (e: unknown) {
+      console.error("[addProject] exception:", e);
+      notify("error", `Failed to create project: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
-  function updateProject(
+  async function updateProject(
     id: string,
     updates: {
       clientName?: string;
@@ -614,15 +613,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   ) {
     const silent = opts?.silent ?? false;
     setAllProjects((prev) => prev.map((p) => (p.id === id ? { ...p, ...updates } : p)));
-    const dbUpdates: Partial<{
-      client_name: string;
-      end_users: string[];
-      modules: string[];
-      final_defense_date: string;
-      adviser_id: string | null;
-      health_status: string;
-      health_source: string;
-    }> = {};
+    const dbUpdates: Record<string, unknown> = {};
     if (updates.clientName !== undefined) dbUpdates.client_name = updates.clientName;
     if (updates.endUsers !== undefined) dbUpdates.end_users = updates.endUsers;
     if (updates.modules !== undefined) dbUpdates.modules = updates.modules;
@@ -631,22 +622,21 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     if (updates.adviserId !== undefined) dbUpdates.adviser_id = updates.adviserId || null;
     if (updates.healthStatus !== undefined) dbUpdates.health_status = updates.healthStatus;
     if (updates.healthSource !== undefined) dbUpdates.health_source = updates.healthSource;
-    db()
-      .from("projects")
-      .update(dbUpdates)
-      .eq("id", id)
-      .then((res: { error: { message: string } | null }) => {
-        if (res.error) {
-          console.error("[updateProject] error:", res.error.message);
-          if (!silent) notify("error", `Failed to update project: ${res.error.message}`);
-          return;
-        }
-        if (!silent) notify("success", "Project updated");
-      })
-      .catch((err: unknown) => {
-        console.error("[updateProject] error:", err);
-        if (!silent) notify("error", "Failed to update project");
-      });
+    try {
+      const res = await db()
+        .from("projects")
+        .update(dbUpdates)
+        .eq("id", id);
+      if (res?.error) {
+        console.error("[updateProject] error:", res.error);
+        if (!silent) notify("error", `Failed to update project: ${res.error.message ?? JSON.stringify(res.error)}`);
+        return;
+      }
+      if (!silent) notify("success", "Project updated");
+    } catch (err: unknown) {
+      console.error("[updateProject] exception:", err);
+      if (!silent) notify("error", `Failed to update project: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   function archiveProject(id: string) {

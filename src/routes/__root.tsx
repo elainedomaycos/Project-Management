@@ -140,7 +140,7 @@ type NavItem = {
   roles: string[];
 };
 
-const ALL_ROLES = ["admin", "adviser", "leader", "developer", "viewer"];
+const ALL_ROLES = ["admin", "leader", "developer", "viewer"];
 
 type NavSection = { heading: string; items: readonly NavItem[] };
 
@@ -474,7 +474,7 @@ function TagDropdown({
   }
 
   return (
-    <div className="mt-1" ref={rootRef}>
+    <div className="relative mt-1" ref={rootRef}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -489,7 +489,7 @@ function TagDropdown({
       </button>
 
       {open && (
-        <div className="mt-1 bg-popover border border-border rounded-md shadow-lg overflow-hidden">
+        <div className="absolute z-50 left-0 right-0 mt-1 bg-popover border border-border rounded-md shadow-lg overflow-hidden">
           {items.length > 0 ? (
             <div className="max-h-40 overflow-y-auto">
               {items.map((item) => (
@@ -555,8 +555,6 @@ function ProjectSelector() {
     endUsers: string[];
     modules: string[];
   }>({ clientName: "", endUsers: [], modules: [] });
-  const [advisers, setAdvisers] = useState<{ id: string; name: string }[]>([]);
-  const [adviserId, setAdviserId] = useState<string>("");
 
   function openManage() {
     if (!currentProject) return;
@@ -565,26 +563,7 @@ function ProjectSelector() {
       endUsers: [...(currentProject.endUsers ?? [])],
       modules: [...(currentProject.modules ?? [])],
     });
-    setAdviserId(currentProject.adviserId ?? "");
     setShowManage(true);
-    // Load adviser accounts for assignment (RLS: profiles readable by authenticated)
-    void (async () => {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data } = await (supabase as any)
-          .from("profiles")
-          .select("id, display_name, email")
-          .eq("role", "adviser");
-        setAdvisers(
-          ((data ?? []) as { id: string; display_name: string; email: string }[]).map((p) => ({
-            id: p.id,
-            name: p.display_name || p.email,
-          })),
-        );
-      } catch {
-        setAdvisers([]);
-      }
-    })();
   }
 
   function handleManage() {
@@ -593,14 +572,13 @@ function ProjectSelector() {
       clientName: manageForm.clientName.trim(),
       endUsers: manageForm.endUsers,
       modules: manageForm.modules,
-      adviserId: adviserId || null,
     });
     setShowManage(false);
   }
 
-  function handleCreate() {
+  async function handleCreate() {
     if (!form.name.trim()) return;
-    addProject({
+    await addProject({
       name: form.name.trim(),
       clientName: form.clientName.trim(),
       endUsers: form.endUsers,
@@ -773,26 +751,6 @@ function ProjectSelector() {
                   placeholder="e.g. Acme Corp"
                   className="w-full mt-1 px-3 py-2 rounded-md bg-surface-2 border border-border text-sm focus:outline-none focus:border-primary"
                 />
-              </div>
-              <div>
-                <label className="text-[10px] font-mono uppercase text-muted-foreground">
-                  Adviser
-                </label>
-                <select
-                  value={adviserId}
-                  onChange={(e) => setAdviserId(e.target.value)}
-                  className="w-full mt-1 px-3 py-2 rounded-md bg-surface-2 border border-border text-sm focus:outline-none focus:border-primary"
-                >
-                  <option value="">No adviser assigned</option>
-                  {advisers.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  Create adviser accounts via Admin (role: Adviser), then assign them here.
-                </p>
               </div>
               <div>
                 <label className="text-[10px] font-mono uppercase text-muted-foreground">
