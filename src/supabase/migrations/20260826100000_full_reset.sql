@@ -52,7 +52,26 @@ DROP FUNCTION IF EXISTS public.recompute_deliverable_status() CASCADE;
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
--- A. Projects
+-- A. Profiles (linked to auth.users — must exist before projects)
+-- ---------------------------------------------------------------------------
+CREATE TABLE public.profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email TEXT NOT NULL DEFAULT '',
+  name TEXT DEFAULT '',
+  display_name TEXT DEFAULT '',
+  role TEXT NOT NULL DEFAULT 'developer' CHECK (role IN ('admin', 'adviser', 'leader', 'developer', 'viewer')),
+  avatar_url TEXT,
+  team TEXT DEFAULT '',
+  bio TEXT DEFAULT '',
+  role_title TEXT DEFAULT '',
+  skills TEXT[] DEFAULT '{}',
+  links JSONB DEFAULT '[]',
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ---------------------------------------------------------------------------
+-- B. Projects
 -- ---------------------------------------------------------------------------
 CREATE TABLE public.projects (
   id TEXT PRIMARY KEY,
@@ -70,7 +89,7 @@ CREATE TABLE public.projects (
 );
 
 -- ---------------------------------------------------------------------------
--- B. Tasks
+-- C. Tasks
 -- ---------------------------------------------------------------------------
 CREATE TABLE public.tasks (
   id TEXT PRIMARY KEY,
@@ -97,30 +116,11 @@ CREATE TABLE public.tasks (
 );
 
 -- ---------------------------------------------------------------------------
--- C. Settings (key-value config: admin emails, developers list, etc.)
+-- D. Settings (key-value config: admin emails, developers list, etc.)
 -- ---------------------------------------------------------------------------
 CREATE TABLE public.settings (
   key TEXT PRIMARY KEY,
   value JSONB NOT NULL
-);
-
--- ---------------------------------------------------------------------------
--- D. Profiles (linked to auth.users)
--- ---------------------------------------------------------------------------
-CREATE TABLE public.profiles (
-  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  email TEXT NOT NULL DEFAULT '',
-  name TEXT DEFAULT '',
-  display_name TEXT DEFAULT '',
-  role TEXT NOT NULL DEFAULT 'developer' CHECK (role IN ('admin', 'adviser', 'leader', 'developer', 'viewer')),
-  avatar_url TEXT,
-  team TEXT DEFAULT '',
-  bio TEXT DEFAULT '',
-  role_title TEXT DEFAULT '',
-  skills TEXT[] DEFAULT '{}',
-  links JSONB DEFAULT '[]',
-  updated_at TIMESTAMPTZ DEFAULT now(),
-  created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- ---------------------------------------------------------------------------
