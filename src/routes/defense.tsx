@@ -307,9 +307,15 @@ function DefensePage() {
 
   async function deleteDeliverable(item: Deliverable) {
     if (!window.confirm(`Delete "${item.title}"? All sub-tasks will be removed too.`)) return;
-    const { error } = await db().from("defense_deliverables").delete().eq("id", item.id);
+    const { error, count } = await db()
+      .from("defense_deliverables")
+      .delete()
+      .eq("id", item.id)
+      .select("id", { count: "exact", head: true });
     if (error) toast.error(error.message);
-    else {
+    else if (count === 0) {
+      toast.error("You don't have permission to delete this deliverable");
+    } else {
       toast.success("Deliverable deleted");
       logActivity(pid, "deliverable_updated", `Deleted "${item.title}"`);
       if (editingDel === item.id) setEditingDel(null);
@@ -398,9 +404,15 @@ function DefensePage() {
   }
 
   async function deleteFeedback(item: FeedbackRow) {
-    const { error } = await db().from("feedback").delete().eq("id", item.id);
+    const { error, count } = await db()
+      .from("feedback")
+      .delete()
+      .eq("id", item.id)
+      .select("id", { count: "exact", head: true });
     if (error) toast.error(error.message);
-    else {
+    else if (count === 0) {
+      toast.error("You don't have permission to delete this feedback");
+    } else {
       toast.success("Feedback deleted");
       logActivity(pid!, "feedback_deleted", item.content.slice(0, 80), "feedback", item.id);
       if (editingFb === item.id) setEditingFb(null);
