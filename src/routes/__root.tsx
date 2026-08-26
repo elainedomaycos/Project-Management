@@ -235,27 +235,6 @@ function AuthGate({ children }: { children: ReactNode }) {
     if (!loading) booted.current = true;
   }, [loading]);
 
-  // After login, show the onboarding screen for at least 3 seconds
-  const [onboarding, setOnboarding] = useState(false);
-  const onboardingStart = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (user && !loading) {
-      if (!onboardingStart.current) {
-        onboardingStart.current = Date.now();
-        setOnboarding(true);
-        const t = setTimeout(() => {
-          setOnboarding(false);
-          onboardingStart.current = null;
-        }, 3000);
-        return () => clearTimeout(t);
-      }
-    } else if (!user) {
-      onboardingStart.current = null;
-      setOnboarding(false);
-    }
-  }, [user, loading]);
-
   // Only navigate on the initial auth resolution (loading true -> false).
   // Once booted, skip redundant navigations triggered by auth state changes
   // (e.g. token refresh on tab focus).
@@ -271,10 +250,10 @@ function AuthGate({ children }: { children: ReactNode }) {
 
     if (!user && !isAuthPage) {
       router.navigate({ to: "/auth" });
-    } else if (user && isAuthPage && !recoveryMode && !onboarding) {
+    } else if (user && isAuthPage && !recoveryMode) {
       router.navigate({ to: "/" });
     }
-  }, [user, loading, recoveryMode, isAuthPage, router, onboarding]);
+  }, [user, loading, recoveryMode, isAuthPage, router]);
 
   // Fallback: if auth takes too long, redirect to auth page so user isn't stuck
   const timedOut = useRef(false);
@@ -298,23 +277,6 @@ function AuthGate({ children }: { children: ReactNode }) {
           </div>
           <p className="text-center text-xs text-muted-foreground animate-pulse">
             Loading...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // Post-login onboarding screen
-  if (onboarding) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-6">
-        <img src="/logo4.png" alt="Logo" className="size-12 rounded-xl object-cover" />
-        <div className="w-56 space-y-2">
-          <div className="h-1 w-full overflow-hidden rounded-full bg-surface-2">
-            <div className="h-full w-2/5 rounded-full bg-primary animate-[loading_1.4s_ease-in-out_infinite]" />
-          </div>
-          <p className="text-center text-xs text-muted-foreground animate-pulse">
-            Onboarding in progress...
           </p>
         </div>
       </div>
