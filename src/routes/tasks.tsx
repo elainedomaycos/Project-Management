@@ -1166,7 +1166,7 @@ function TasksPage() {
               </div>
             </div>
             <div className="flex justify-between px-5 py-4 border-t border-border">
-              {isAdmin && (
+              {(isAdmin || isLeader) && (
                 <button
                   onClick={() => {
                     removeTask(selectedTask.id);

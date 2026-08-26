@@ -807,13 +807,15 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     const proj = projects.find((p) => p.id === projectId);
     if (!proj) return "TASK-001";
     const projectTasks = tasks.filter((t) => t.projectId === projectId);
-    const maxNum = projectTasks.reduce((max, t) => {
+    const usedNums = new Set<number>();
+    for (const t of projectTasks) {
       const parts = t.taskId.split("-");
       const num = parseInt(parts[parts.length - 1], 10);
-      return isNaN(num) ? max : Math.max(max, num);
-    }, 0);
-    const next = (maxNum + 1).toString().padStart(3, "0");
-    return `${proj.prefix}-${next}`;
+      if (!isNaN(num)) usedNums.add(num);
+    }
+    let next = 1;
+    while (usedNums.has(next)) next++;
+    return `${proj.prefix}-${next.toString().padStart(3, "0")}`;
   }
 
   function getProjectTasks(projectId: string): Task[] {
