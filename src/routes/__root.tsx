@@ -256,8 +256,19 @@ function AuthGate({ children }: { children: ReactNode }) {
     }
   }, [user, loading]);
 
+  // Only navigate on the initial auth resolution (loading true -> false).
+  // Once booted, skip redundant navigations triggered by auth state changes
+  // (e.g. token refresh on tab focus).
+  const authResolved = useRef(false);
   useLayoutEffect(() => {
-    if (loading) return;
+    if (loading) {
+      authResolved.current = false;
+      return;
+    }
+    const wasResolved = authResolved.current;
+    authResolved.current = true;
+    if (wasResolved) return;
+
     if (!user && !isAuthPage) {
       router.navigate({ to: "/auth" });
     } else if (user && isAuthPage && !recoveryMode && !onboarding) {

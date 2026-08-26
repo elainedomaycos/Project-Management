@@ -72,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // SIGNED_IN events from the listener to prevent a stale cached session
   // from briefly painting the dashboard.
   const hasValidSessionRef = useRef(false);
+  const userRef = useRef<User | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -118,6 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
         setUser(u);
+        userRef.current = u;
         hasValidSessionRef.current = true;
         const cached = readCache<Profile>(`profile:${u.id}`);
         if (cached) setProfile(cached);
@@ -175,12 +177,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // explicit sign-out/token-refresh.
       if (event === "SIGNED_IN" && !hasValidSessionRef.current) return;
       const u = session?.user ?? null;
-      setUser(u);
+      // Skip re-render if the user identity hasn't changed (e.g. token refresh).
+      const prev = userRef.current;
+      const changed = (prev?.id ?? null) !== (u?.id ?? null);
+      userRef.current = u;
+      if (changed) {
+        setUser(u);
+      }
       if (u) {
-        try {
-          await loadProfile(u.id, u.email ?? "");
-        } catch (e) {
-          console.warn("[Auth] loadProfile error on auth change:", e);
+        if (changed) {
+          try {
+            await loadProfile(u.id, u.email ?? "");
+          } catch (e) {
+            console.warn("[Auth] loadProfile error on auth change:", e);
+          }
         }
       } else {
         setProfile(null);
