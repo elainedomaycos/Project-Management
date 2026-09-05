@@ -17,6 +17,31 @@ import { toast } from "sonner";
 export type TaskStatus = "pending" | "doing" | "qa" | "done";
 export type QaStatus = "waiting" | "passed" | "failed";
 
+export type DefectSeverity = "Low" | "Medium" | "High" | "Critical";
+export type DefectPriority = "Low" | "Medium" | "High";
+export type DefectStatus = "Open" | "In Progress" | "Fixed" | "Closed";
+
+export type Defect = {
+  id: string;
+  projectId: string;
+  title: string;
+  module: string;
+  environment: string;
+  precondition: string;
+  stepsToReproduce: string;
+  expectedResult: string;
+  actualResult: string;
+  severity: DefectSeverity;
+  priority: DefectPriority;
+  status: DefectStatus;
+  assignedDeveloperId: string;
+  relatedTaskId?: string;
+  evidenceUrl: string;
+  createdAt: string;
+};
+
+export type NewDefectInput = Omit<Defect, "id" | "createdAt">;
+
 export type Task = {
   id: string;
   taskId: string;
@@ -66,6 +91,7 @@ export type AppView = "pm" | "developer" | "qa" | "client";
 type CachedProjectData = {
   projects: Project[];
   tasks: Task[];
+  defects: Defect[];
   developers: string[];
   qaUsers: string[];
 };
@@ -74,6 +100,7 @@ type ProjectContextType = {
   projects: Project[];
   archivedProjects: Project[];
   tasks: Task[];
+  defects: Defect[];
   currentProject: Project | null;
   currentView: AppView;
   currentDeveloper: string;
@@ -113,6 +140,11 @@ type ProjectContextType = {
   getDeveloperTasks: (devName: string) => Task[];
   getQaTasks: () => Task[];
   getAnalytics: (projectId: string) => ProjectAnalytics;
+  addDefect: (d: NewDefectInput) => void;
+  updateDefect: (id: string, updates: Partial<Defect>) => void;
+  deleteDefect: (id: string) => void;
+  nextDefectId: (projectId: string) => string;
+  getProjectDefects: (projectId: string) => Defect[];
   addDeveloper: (name: string) => void;
   removeDeveloper: (name: string) => void;
   addQaUser: (name: string) => void;
@@ -210,6 +242,67 @@ function fromDbTask(r: TaskRow): Task {
   };
 }
 
+type DefectRow = {
+  id: string;
+  project_id: string | null;
+  title: string;
+  module: string | null;
+  environment: string | null;
+  precondition: string | null;
+  steps_to_reproduce: string | null;
+  expected_result: string | null;
+  actual_result: string | null;
+  severity: string | null;
+  priority: string | null;
+  status: string | null;
+  assigned_developer_id: string | null;
+  related_task_id: string | null;
+  evidence_url: string | null;
+  created_at: string | null;
+};
+
+function fromDbDefect(r: DefectRow): Defect {
+  return {
+    id: r.id,
+    projectId: r.project_id || "",
+    title: r.title,
+    module: r.module || "",
+    environment: r.environment || "",
+    precondition: r.precondition || "",
+    stepsToReproduce: r.steps_to_reproduce || "",
+    expectedResult: r.expected_result || "",
+    actualResult: r.actual_result || "",
+    severity: (r.severity || "Medium") as Defect["severity"],
+    priority: (r.priority || "Medium") as Defect["priority"],
+    status: (r.status || "Open") as Defect["status"],
+    assignedDeveloperId: r.assigned_developer_id || "",
+    relatedTaskId: r.related_task_id || "",
+    evidenceUrl: r.evidence_url || "",
+    createdAt: r.created_at || "",
+  };
+}
+
+function toDbDefect(d: Defect) {
+  return {
+    id: d.id,
+    project_id: d.projectId,
+    title: d.title,
+    module: d.module,
+    environment: d.environment,
+    precondition: d.precondition,
+    steps_to_reproduce: d.stepsToReproduce,
+    expected_result: d.expectedResult,
+    actual_result: d.actualResult,
+    severity: d.severity,
+    priority: d.priority,
+    status: d.status,
+    assigned_developer_id: d.assignedDeveloperId,
+    related_task_id: d.relatedTaskId ?? "",
+    evidence_url: d.evidenceUrl,
+    created_at: d.createdAt,
+  };
+}
+
 type ProjectRow = {
   id: string;
   name: string;
@@ -284,6 +377,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   const { profile } = useAuth();
   const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [allTasks, setAllTasks] = useState<Task[]>([]);
+  const [allDefects, setAllDefects] = useState<Defect[]>([]);
   const [currentProject, setCurrentProjectState] = useState<Project | null>(() =>
     getInitialProject([]),
   );
@@ -306,6 +400,10 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     const proj = allProjects.find((p) => p.id === t.projectId);
     return !proj?.archivedAt;
   });
+  const defects = allDefects.filter((d) => {
+    const proj = allProjects.find((p) => p.id === d.projectId);
+    return !proj?.archivedAt;
+  });
 
   // Load from Supabase — re-fetch when the user first becomes available
   // (on mount the user may not be authenticated yet, so RLS returns nothing)
@@ -315,18 +413,21 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       if (cached) {
         setAllProjects(cached.projects);
         setAllTasks(cached.tasks);
+        setAllDefects(cached.defects ?? []);
         setDeveloperState(cached.developers);
         setQaState(cached.qaUsers);
         setLoading(false);
       }
       try {
-        const [projRes, taskRes, profilesRes] = await Promise.all([
+        const [projRes, taskRes, defectRes, profilesRes] = await Promise.all([
           db().from("projects").select("*").order("name"),
           db().from("tasks").select("*"),
+          db().from("defects").select("*"),
           db().from("profiles").select("display_name, role"),
         ]);
         if (projRes.data?.length) setAllProjects(projRes.data.map(fromDbProject));
         if (taskRes.data) setAllTasks(taskRes.data.map(fromDbTask));
+        if (defectRes.data) setAllDefects(defectRes.data.map(fromDbDefect));
 
         // Derive developer / QA lists from profiles table by role
         const profileList: { display_name: string; role: string }[] = profilesRes.data ?? [];
@@ -371,7 +472,9 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         /* ignore — no membership or table missing */
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [loading, profile?.id, allProjects.length]);
 
   // Live-update tasks from realtime changes so edits by other users show up immediately
@@ -390,6 +493,33 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         } else if (payload.eventType === "UPDATE") {
           setAllTasks((prev) =>
             prev.map((t) => (t.id === payload.new?.id ? fromDbTask(payload.new as TaskRow) : t)),
+          );
+        }
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Live-update defects from realtime changes so edits by other users show up immediately
+  useEffect(() => {
+    const channel = supabase
+      .channel(`defects-changes:${++realtimeSeq}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "defects" }, (payload) => {
+        if (payload.eventType === "DELETE") {
+          setAllDefects((prev) => prev.filter((d) => d.id !== payload.old?.id));
+        } else if (payload.eventType === "INSERT") {
+          setAllDefects((prev) =>
+            prev.some((d) => d.id === payload.new?.id)
+              ? prev
+              : [...prev, fromDbDefect(payload.new as DefectRow)],
+          );
+        } else if (payload.eventType === "UPDATE") {
+          setAllDefects((prev) =>
+            prev.map((d) =>
+              d.id === payload.new?.id ? fromDbDefect(payload.new as DefectRow) : d,
+            ),
           );
         }
       })
@@ -532,10 +662,11 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     writeCache<CachedProjectData>("project-data", {
       projects: allProjects,
       tasks: allTasks,
+      defects: allDefects,
       developers,
       qaUsers,
     });
-  }, [allProjects, allTasks, developers, qaUsers, loading]);
+  }, [allProjects, allTasks, allDefects, developers, qaUsers, loading]);
 
   // When fresh projects load from Supabase, re-validate the selection
   const prevProjectsLen = useRef(allProjects.length);
@@ -803,6 +934,91 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       .catch(() => notify("error", "Failed to delete task"));
   }
 
+  function nextDefectId(projectId: string): string {
+    const projectDefects = defects.filter((d) => d.projectId === projectId);
+    const usedNums = new Set<number>();
+    for (const d of projectDefects) {
+      const parts = d.id.split("-");
+      const num = parseInt(parts[parts.length - 1], 10);
+      if (!isNaN(num)) usedNums.add(num);
+    }
+    let next = 1;
+    while (usedNums.has(next)) next++;
+    return `BUG-${next.toString().padStart(3, "0")}`;
+  }
+
+  function getProjectDefects(projectId: string): Defect[] {
+    return defects.filter((d) => d.projectId === projectId);
+  }
+
+  function addDefect(d: NewDefectInput) {
+    const defect: Defect = {
+      ...d,
+      id: nextDefectId(d.projectId),
+      createdAt: new Date().toISOString().slice(0, 10),
+    };
+    setAllDefects((prev) => [...prev, defect]);
+    db()
+      .from("defects")
+      .insert(toDbDefect(defect))
+      .then(() => notify("success", "Defect logged"))
+      .catch(() => notify("error", "Failed to log defect"));
+    if (defect.assignedDeveloperId) {
+      notifyDeveloper(
+        defect.assignedDeveloperId,
+        `Assigned defect ${defect.id}: ${defect.title}`,
+        defect.id,
+      );
+    }
+  }
+
+  function updateDefect(id: string, updates: Partial<Defect>) {
+    const prevDefect = allDefects.find((d) => d.id === id);
+    setAllDefects((prev) => prev.map((d) => (d.id === id ? { ...d, ...updates } : d)));
+    if (
+      updates.assignedDeveloperId &&
+      prevDefect &&
+      updates.assignedDeveloperId !== prevDefect.assignedDeveloperId
+    ) {
+      notifyDeveloper(
+        updates.assignedDeveloperId,
+        `Assigned defect ${prevDefect.id}: ${prevDefect.title}`,
+        id,
+      );
+    }
+    const dbUpdates: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(updates)) {
+      if (k === "projectId") dbUpdates.project_id = v;
+      else if (k === "stepsToReproduce") dbUpdates.steps_to_reproduce = v;
+      else if (k === "expectedResult") dbUpdates.expected_result = v;
+      else if (k === "actualResult") dbUpdates.actual_result = v;
+      else if (k === "assignedDeveloperId") dbUpdates.assigned_developer_id = v;
+      else if (k === "relatedTaskId") dbUpdates.related_task_id = v;
+      else if (k === "evidenceUrl") dbUpdates.evidence_url = v;
+      else if (k === "createdAt") dbUpdates.created_at = v;
+      else dbUpdates[k] = v;
+    }
+    db()
+      .from("defects")
+      .update(dbUpdates)
+      .eq("id", id)
+      .then(() => {
+        if (taskEditToastTimer.current) clearTimeout(taskEditToastTimer.current);
+        taskEditToastTimer.current = setTimeout(() => notify("success", "Defect updated"), 600);
+      })
+      .catch(() => notify("error", "Failed to update defect"));
+  }
+
+  function deleteDefect(id: string) {
+    setAllDefects((prev) => prev.filter((d) => d.id !== id));
+    db()
+      .from("defects")
+      .delete()
+      .eq("id", id)
+      .then(() => notify("success", "Defect deleted"))
+      .catch(() => notify("error", "Failed to delete defect"));
+  }
+
   function nextTaskId(projectId: string): string {
     const proj = projects.find((p) => p.id === projectId);
     if (!proj) return "TASK-001";
@@ -920,6 +1136,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         projects,
         archivedProjects,
         tasks,
+        defects,
         currentProject,
         currentView,
         currentDeveloper,
@@ -942,6 +1159,11 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         getDeveloperTasks,
         getQaTasks,
         getAnalytics,
+        addDefect,
+        updateDefect,
+        deleteDefect,
+        nextDefectId,
+        getProjectDefects,
         addDeveloper,
         removeDeveloper,
         addQaUser,

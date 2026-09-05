@@ -3,7 +3,17 @@ import { PageHeader } from "@/components/console";
 import { useState } from "react";
 import { useProject, type TaskStatus } from "@/lib/project-context";
 import { useAuth } from "@/lib/auth-context";
-import { CheckCircle2, Clock, ArrowRight, Users, Plus, X, ArrowUpDown } from "lucide-react";
+import {
+  CheckCircle2,
+  Clock,
+  ArrowRight,
+  Users,
+  Plus,
+  X,
+  ArrowUpDown,
+  Bug,
+  AlertTriangle,
+} from "lucide-react";
 
 export const Route = createFileRoute("/developer")({
   head: () => ({
@@ -18,10 +28,12 @@ export const Route = createFileRoute("/developer")({
 function DeveloperPage() {
   const {
     tasks,
+    defects,
     currentProject,
     developers,
     qaUsers,
     updateTask,
+    updateDefect,
     addDeveloper,
     removeDeveloper,
     addQaUser,
@@ -39,6 +51,21 @@ function DeveloperPage() {
     : tasks;
   const filtered =
     filterDev === "all" ? projectTasks : projectTasks.filter((t) => t.developer === filterDev);
+
+  const projectDefects = currentProject
+    ? defects.filter((d) => d.projectId === currentProject.id)
+    : defects;
+  const assignedDefects = projectDefects
+    .filter((d) => d.status === "Open" || d.status === "In Progress")
+    .filter((d) =>
+      filterDev === "all"
+        ? isAdmin || isLeader || d.assignedDeveloperId === profile?.name
+        : d.assignedDeveloperId === filterDev,
+    )
+    .sort(
+      (a, b) =>
+        parseInt(a.id.split("-").pop() || "0", 10) - parseInt(b.id.split("-").pop() || "0", 10),
+    );
 
   function parseTaskNum(id: string): number {
     const parts = id.split("-").slice(1);
@@ -109,6 +136,78 @@ function DeveloperPage() {
             Showing {activeTasks.length} of {projectTasks.length} tasks
           </span>
         </div>
+
+        {/* Assigned Defects */}
+        {assignedDefects.length > 0 && (
+          <div>
+            <h2 className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest mb-4">
+              Assigned Defects
+            </h2>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {assignedDefects.map((d) => (
+                <div
+                  key={d.id}
+                  className="bg-card border border-border rounded-lg p-4 flex flex-col hover:border-primary/40 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Bug className="size-3 text-destructive shrink-0" />
+                      <span className="font-mono text-[10px] text-destructive font-bold">
+                        {d.id}
+                      </span>
+                      {d.severity === "High" || d.severity === "Critical" ? (
+                        <AlertTriangle
+                          className={`size-3 shrink-0 ${d.severity === "Critical" ? "text-destructive" : "text-warning"}`}
+                        />
+                      ) : null}
+                    </div>
+                    <span
+                      className={`shrink-0 px-1.5 py-0.5 text-[9px] font-mono rounded ${
+                        d.severity === "Critical"
+                          ? "bg-destructive/10 text-destructive"
+                          : d.severity === "High"
+                            ? "bg-warning/10 text-warning"
+                            : d.severity === "Medium"
+                              ? "bg-info/10 text-info"
+                              : "bg-muted/10 text-muted-foreground"
+                      }`}
+                    >
+                      {d.severity}
+                    </span>
+                  </div>
+
+                  <h3 className="text-sm font-medium truncate">{d.title}</h3>
+
+                  <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground truncate">
+                    {d.module && <span className="truncate">{d.module}</span>}
+                    {d.module && d.environment && <span>·</span>}
+                    {d.environment && <span className="truncate">{d.environment}</span>}
+                  </div>
+
+                  <div className="mt-auto pt-3 flex items-center gap-2">
+                    {d.status === "Open" ? (
+                      <button
+                        onClick={() => updateDefect(d.id, { status: "In Progress" })}
+                        className="px-2.5 py-1 bg-primary text-primary-foreground text-[9px] font-bold rounded hover:brightness-110 flex items-center gap-1"
+                      >
+                        <Clock className="size-2.5" />
+                        Start Fix
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => updateDefect(d.id, { status: "Fixed" })}
+                        className="px-2.5 py-1 bg-success/10 text-success text-[9px] font-bold rounded hover:bg-success/20 flex items-center gap-1"
+                      >
+                        <CheckCircle2 className="size-2.5" />
+                        Mark Fixed
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Active Tasks */}
         <div>
