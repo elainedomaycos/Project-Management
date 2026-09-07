@@ -9,7 +9,6 @@ import { computeAutoHealth, HEALTH_META, type HealthStatus } from "@/lib/health"
 import { toast } from "sonner";
 import {
   Target,
-  CalendarClock,
   CheckCircle2,
   XCircle,
   Plus,
@@ -138,7 +137,7 @@ function timeAgo(iso: string): string {
 }
 
 function DefensePage() {
-  const { currentProject, updateProject, developers, tasks } = useProject();
+  const { currentProject, developers, tasks, finalDefenseDate } = useProject();
   const { isAdmin, isLeader, isViewer } = useAuth();
   const pid = currentProject?.id ?? null;
   const canManage = isAdmin || isLeader;
@@ -321,16 +320,6 @@ function DefensePage() {
       if (editingDel === item.id) setEditingDel(null);
       fetchAll();
     }
-  }
-
-  function setDeadline(value: string) {
-    if (!pid) return;
-    updateProject(pid, { finalDefenseDate: value });
-    logActivity(
-      pid,
-      "defense_date_set",
-      value ? `Final defense date set to ${value}` : "Final defense date cleared",
-    );
   }
 
   async function submitFeedback() {
@@ -518,7 +507,7 @@ function DefensePage() {
     }
   }
 
-  const activeHealth: HealthStatus = computeAutoHealth(items, currentProject.finalDefenseDate, {
+  const activeHealth: HealthStatus = computeAutoHealth(items, finalDefenseDate, {
     tasks: tasks.filter((t) => t.projectId === pid),
   });
 
@@ -549,21 +538,7 @@ function DefensePage() {
 
       <div className="flex-1 overflow-y-auto p-6 space-y-8">
         {/* ------------------------------ Roadmap summary */}
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="p-4 bg-card border border-border rounded-md space-y-2">
-            <div className="flex items-center gap-2 text-[10px] font-mono uppercase text-muted-foreground">
-              <CalendarClock className="size-3.5" />
-              Hard Deadline
-            </div>
-            <input
-              type="date"
-              value={currentProject.finalDefenseDate}
-              onChange={(e) => setDeadline(e.target.value)}
-              readOnly={!canManage}
-              className={`w-full px-2 py-1.5 rounded-md bg-surface-2 border border-border text-sm focus:outline-none focus:border-primary ${!canManage ? "opacity-70" : ""}`}
-            />
-          </div>
-
+        <div className="grid gap-4 md:grid-cols-2">
           <div className="p-4 bg-card border border-border rounded-md space-y-2">
             <div className="flex items-center gap-2 text-[10px] font-mono uppercase text-muted-foreground">
               <CheckCircle2 className="size-3.5" />

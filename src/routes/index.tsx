@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/console";
 import { useProject } from "@/lib/project-context";
+import { useAuth } from "@/lib/auth-context";
 import { HEALTH_META, computeAutoHealth, type HealthDeliverable } from "@/lib/health";
 import { supabase } from "@/integrations/supabase/client";
 import { useState, useEffect } from "react";
@@ -48,7 +49,6 @@ type DashboardProjectStats = {
   id: string;
   name: string;
   prefix: string;
-  finalDefenseDate: string | null;
   tasks: DashboardTaskStats;
   deliverables: { total: number; completed: number; overdue: number };
   defects: { openCriticalHigh: number };
@@ -130,7 +130,9 @@ function SemiGauge({ pct, size = 200 }: { pct: number; size?: number }) {
 }
 
 function Dashboard() {
-  const { projects, tasks, currentProject, getAnalytics } = useProject();
+  const { projects, tasks, currentProject, getAnalytics, finalDefenseDate, setFinalDefenseDate } =
+    useProject();
+  const { isAdmin } = useAuth();
 
   const [deliverableStats, setDeliverableStats] = useState({
     total: 0,
@@ -157,7 +159,7 @@ function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, [isAll, projects, tasks]);
+  }, [isAll, projects, tasks, finalDefenseDate]);
 
   // Fetch deliverables for all projects to compute health dynamically
   const [allDeliverables, setAllDeliverables] = useState<Map<string, HealthDeliverable[]>>(
@@ -296,19 +298,16 @@ function Dashboard() {
   };
   if (statsProjects) {
     const today = new Date().toISOString().slice(0, 10);
-    const upcoming = statsProjects
-      .map((s) => s.finalDefenseDate || "")
-      .filter((d) => d && d >= today)
-      .sort()[0];
     block.avgProgress = statsProjects.length
       ? Math.round(
           statsProjects.reduce((sum, s) => sum + (s.readiness ?? 0), 0) / statsProjects.length,
         )
       : 0;
     block.atRiskCount = statsProjects.filter((s) => s.health !== "on_track").length;
-    block.daysToDefense = upcoming
+    block.daysToDefense = finalDefenseDate
       ? Math.round(
-          (new Date(`${upcoming}T00:00:00`).getTime() - new Date(`${today}T00:00:00`).getTime()) /
+          (new Date(`${finalDefenseDate}T00:00:00`).getTime() -
+            new Date(`${today}T00:00:00`).getTime()) /
             86_400_000,
         )
       : null;
@@ -340,7 +339,7 @@ function Dashboard() {
     for (const p of projects) {
       const pTasks = tasks.filter((t) => t.projectId === p.id);
       const pDels = allDeliverables.get(p.id) ?? [];
-      const computed = computeAutoHealth(pDels, p.finalDefenseDate, { tasks: pTasks });
+      const computed = computeAutoHealth(pDels, finalDefenseDate, { tasks: pTasks });
       healthCounts[computed] = (healthCounts[computed] || 0) + 1;
     }
   }
@@ -384,6 +383,28 @@ function Dashboard() {
           label: `${totalTasks} tasks · ${overdue} overdue`,
           tone: overdue > 0 ? "warn" : "info",
         }}
+        actions={
+          <div
+            className="flex items-center gap-2 rounded-md border border-border px-2 py-1"
+            title={
+              finalDefenseDate ? `Final Defense: ${finalDefenseDate}` : "No final defense date set"
+            }
+          >
+            <CalendarClock className="size-4 text-muted-foreground" />
+            {isAdmin ? (
+              <input
+                type="date"
+                value={finalDefenseDate}
+                onChange={(e) => setFinalDefenseDate(e.target.value)}
+                className="bg-transparent text-xs font-mono focus:outline-none focus:border-primary"
+              />
+            ) : (
+              <span className="text-xs font-mono text-muted-foreground">
+                {finalDefenseDate || "—"}
+              </span>
+            )}
+          </div>
+        }
       />
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">

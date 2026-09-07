@@ -86,7 +86,6 @@ export type Project = {
   modules: string[];
   repos: ProjectRepo[];
   archivedAt: string | null;
-  finalDefenseDate: string;
   adviserId: string | null;
   healthStatus: HealthStatus;
   healthSource: HealthSource;
@@ -118,6 +117,8 @@ type ProjectContextType = {
   developers: string[];
   qaUsers: string[];
   loading: boolean;
+  finalDefenseDate: string;
+  setFinalDefenseDate: (value: string) => void;
   setCurrentProject: (id: string | null) => void;
   setCurrentView: (v: AppView) => void;
   setCurrentDeveloper: (name: string) => void;
@@ -135,7 +136,6 @@ type ProjectContextType = {
       endUsers?: string[];
       modules?: string[];
       repos?: ProjectRepo[];
-      finalDefenseDate?: string;
       adviserId?: string | null;
       healthStatus?: HealthStatus;
       healthSource?: HealthSource;
@@ -327,7 +327,6 @@ type ProjectRow = {
   repos: { label: string; url: string }[] | null;
   repo_url: string | null;
   archived_at: string | null;
-  final_defense_date?: string | null;
   adviser_id?: string | null;
   health_status?: string | null;
   health_source?: string | null;
@@ -347,7 +346,6 @@ function fromDbProject(r: ProjectRow): Project {
     modules: r.modules || [],
     repos,
     archivedAt: r.archived_at || null,
-    finalDefenseDate: r.final_defense_date || "",
     adviserId: r.adviser_id || null,
     healthStatus: (r.health_status as HealthStatus) || "on_track",
     healthSource: (r.health_source as HealthSource) || "auto",
@@ -425,6 +423,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   const [currentDeveloper, setCurrentDeveloper] = useState("");
   const [memberships, setMemberships] = useState<GroupMembership[]>([]);
   const [loading, setLoading] = useState(true);
+  const [finalDefenseDate, setFinalDefenseDateState] = useState("");
 
   const lastToast = useRef<string | number | null>(null);
   const taskEditToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -492,6 +491,16 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
             });
           }
           setMemberships(memList);
+        }
+
+        const setRes = await db()
+          .from("settings")
+          .select("value")
+          .eq("key", "final_defense_date")
+          .maybeSingle();
+        if (setRes.data) {
+          const v = setRes.data.value;
+          if (typeof v === "string") setFinalDefenseDateState(v);
         }
       } catch (e) {
         console.warn("Failed to load from Supabase, using defaults", e);
@@ -678,7 +687,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         if (cancelled || error || !data) return;
         const computed = computeAutoHealth(
           data as { status: string; due_date: string | null }[],
-          cp.finalDefenseDate,
+          finalDefenseDate,
           { tasks: allTasks.filter((t) => t.projectId === cp.id) },
         );
         if (!cancelled && computed !== cp.healthStatus) {
@@ -704,7 +713,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     currentProject?.id,
-    currentProject?.finalDefenseDate,
+    finalDefenseDate,
     currentProject?.healthSource,
     currentProject?.healthStatus,
     allTasks,
@@ -820,7 +829,6 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       modules: data.modules,
       repos: data.repos ?? [],
       archivedAt: null,
-      finalDefenseDate: "",
       adviserId: null,
       healthStatus: "on_track",
       healthSource: "auto",
@@ -863,7 +871,6 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       endUsers?: string[];
       modules?: string[];
       repos?: ProjectRepo[];
-      finalDefenseDate?: string;
       adviserId?: string | null;
       healthStatus?: HealthStatus;
       healthSource?: HealthSource;
@@ -877,8 +884,6 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     if (updates.endUsers !== undefined) dbUpdates.end_users = updates.endUsers;
     if (updates.modules !== undefined) dbUpdates.modules = updates.modules;
     if (updates.repos !== undefined) dbUpdates.repos = updates.repos;
-    if (updates.finalDefenseDate !== undefined)
-      dbUpdates.final_defense_date = updates.finalDefenseDate;
     if (updates.adviserId !== undefined) dbUpdates.adviser_id = updates.adviserId || null;
     if (updates.healthStatus !== undefined) dbUpdates.health_status = updates.healthStatus;
     if (updates.healthSource !== undefined) dbUpdates.health_source = updates.healthSource;
@@ -902,6 +907,19 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
           `Failed to update project: ${err instanceof Error ? err.message : String(err)}`,
         );
     }
+  }
+
+  function setFinalDefenseDate(value: string) {
+    setFinalDefenseDateState(value);
+    db()
+      .from("settings")
+      .upsert({ key: "final_defense_date", value })
+      .then((res: { error: { message: string } | null }) => {
+        if (res?.error) {
+          console.error("[setFinalDefenseDate]", res.error);
+          notify("error", `Failed to save defense date: ${res.error.message}`);
+        }
+      });
   }
 
   function archiveProject(id: string) {
@@ -1351,6 +1369,8 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         developers,
         qaUsers,
         loading,
+        finalDefenseDate,
+        setFinalDefenseDate,
         setCurrentProject,
         setCurrentView,
         setCurrentDeveloper,

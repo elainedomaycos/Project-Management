@@ -22,14 +22,15 @@ STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  WITH today AS (SELECT to_char(CURRENT_DATE, 'YYYY-MM-DD') AS d)
+  WITH today AS (SELECT to_char(CURRENT_DATE, 'YYYY-MM-DD') AS d),
+  -- Single shared final-defense deadline for all projects, stored in settings.
+  dl AS (SELECT COALESCE((SELECT s.value #>> '{}' FROM public.settings s WHERE s.key = 'final_defense_date'), '') AS d)
   SELECT COALESCE(
     jsonb_agg(
       jsonb_build_object(
         'id', p.id,
         'name', p.name,
         'prefix', p.prefix,
-        'finalDefenseDate', p.final_defense_date,
         'tasks', jsonb_build_object(
           'total', ts.total,
           'pending', ts.pending,
@@ -68,21 +69,21 @@ AS $$
               AND d.due_date < today.d
           )
           -- final defense date reached with incomplete deliverables -> behind
-          OR (p.final_defense_date <> '' AND p.final_defense_date <= today.d
+          OR (dl.d <> '' AND dl.d <= today.d
               AND EXISTS (
                 SELECT 1 FROM public.defense_deliverables d
                 WHERE d.project_id = p.id AND d.status <> 'submitted'
               ))
           -- pace: final defense recedes and < 50% of all work done
-          OR (p.final_defense_date <> '' AND p.final_defense_date > today.d
+          OR (dl.d <> '' AND dl.d > today.d
               AND ts.total + ds.total > 0
               AND (ts.done + ds.completed)::numeric / (ts.total + ds.total) < 0.5
-              AND p.final_defense_date <= to_char(CURRENT_DATE + 14, 'YYYY-MM-DD'))
+              AND dl.d <= to_char(CURRENT_DATE + 14, 'YYYY-MM-DD'))
           -- pace: final defense far and < 25% of all work done
-          OR (p.final_defense_date <> '' AND p.final_defense_date > today.d
+          OR (dl.d <> '' AND dl.d > today.d
               AND ts.total + ds.total > 0
               AND (ts.done + ds.completed)::numeric / (ts.total + ds.total) < 0.25
-              AND p.final_defense_date <= to_char(CURRENT_DATE + 30, 'YYYY-MM-DD'))
+              AND dl.d <= to_char(CURRENT_DATE + 30, 'YYYY-MM-DD'))
           THEN 'behind'
           -- any incomplete deliverable due within 7 days -> at_risk
           WHEN EXISTS (
@@ -93,10 +94,10 @@ AS $$
               AND d.due_date <= to_char(CURRENT_DATE + 7, 'YYYY-MM-DD')
           )
           -- pace: <= 30 days out and < 25% of all work done -> at_risk
-          OR (p.final_defense_date <> '' AND p.final_defense_date > today.d
+          OR (dl.d <> '' AND dl.d > today.d
               AND ts.total + ds.total > 0
               AND (ts.done + ds.completed)::numeric / (ts.total + ds.total) < 0.25
-              AND p.final_defense_date <= to_char(CURRENT_DATE + 30, 'YYYY-MM-DD'))
+              AND dl.d <= to_char(CURRENT_DATE + 30, 'YYYY-MM-DD'))
           THEN 'at_risk'
           ELSE 'on_track'
         END
@@ -107,6 +108,7 @@ AS $$
   )
   FROM public.projects p
   CROSS JOIN today
+  CROSS JOIN dl
   CROSS JOIN LATERAL (
     SELECT
       COUNT(*)::int AS total,
