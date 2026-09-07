@@ -20,6 +20,7 @@ import {
   X,
   Shield,
   LogOut,
+  Github,
   User as UserIcon,
   UserCircle,
   Archive,
@@ -583,13 +584,15 @@ function ProjectSelector() {
     clientName: string;
     endUsers: string[];
     modules: string[];
-  }>({ name: "", clientName: "", endUsers: [], modules: [] });
+    repoUrl: string;
+  }>({ name: "", clientName: "", endUsers: [], modules: [], repoUrl: "" });
   const [showManage, setShowManage] = useState(false);
   const [manageForm, setManageForm] = useState<{
     clientName: string;
     endUsers: string[];
     modules: string[];
-  }>({ clientName: "", endUsers: [], modules: [] });
+    repoUrl: string;
+  }>({ clientName: "", endUsers: [], modules: [], repoUrl: "" });
 
   function openManage() {
     if (!currentProject) return;
@@ -597,6 +600,7 @@ function ProjectSelector() {
       clientName: currentProject.clientName || "",
       endUsers: [...(currentProject.endUsers ?? [])],
       modules: [...(currentProject.modules ?? [])],
+      repoUrl: currentProject.repoUrl || "",
     });
     setShowManage(true);
   }
@@ -607,6 +611,7 @@ function ProjectSelector() {
       clientName: manageForm.clientName.trim(),
       endUsers: manageForm.endUsers,
       modules: manageForm.modules,
+      repoUrl: manageForm.repoUrl,
     });
     setShowManage(false);
   }
@@ -618,27 +623,41 @@ function ProjectSelector() {
       clientName: form.clientName.trim(),
       endUsers: form.endUsers,
       modules: form.modules,
+      repoUrl: form.repoUrl,
     });
-    setForm({ name: "", clientName: "", endUsers: [], modules: [] });
+    setForm({ name: "", clientName: "", endUsers: [], modules: [], repoUrl: "" });
     setShowModal(false);
   }
 
   return (
     <div className="space-y-1.5">
-      <div className="relative">
-        <select
-          value={currentProject?.id ?? "__all__"}
-          onChange={(e) => setCurrentProject(e.target.value === "__all__" ? null : e.target.value)}
-          className="w-full appearance-none px-3 py-1.5 rounded-md bg-surface-2 border border-border text-xs font-medium focus:outline-none focus:border-primary cursor-pointer"
-        >
-          <option value="__all__">All Projects</option>
-          {projects.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 size-3 text-muted-foreground pointer-events-none" />
+      <div className="flex gap-1">
+        <div className="relative flex-1">
+          <select
+            value={currentProject?.id ?? "__all__"}
+            onChange={(e) => setCurrentProject(e.target.value === "__all__" ? null : e.target.value)}
+            className="w-full appearance-none px-3 py-1.5 rounded-md bg-surface-2 border border-border text-xs font-medium focus:outline-none focus:border-primary cursor-pointer"
+          >
+            <option value="__all__">All Projects</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 size-3 text-muted-foreground pointer-events-none" />
+        </div>
+        {currentProject?.repoUrl && (
+          <a
+            href={currentProject.repoUrl}
+            target="_blank"
+            rel="noreferrer"
+            title="Open repository"
+            className="shrink-0 grid place-items-center size-8 rounded-md bg-surface-2 border border-border text-muted-foreground hover:text-foreground hover:border-primary transition-colors"
+          >
+            <Github className="size-3.5" />
+          </a>
+        )}
       </div>
       {isAdmin && (
         <div className="flex gap-1">
@@ -711,7 +730,7 @@ function ProjectSelector() {
                 <p className="text-[10px] text-muted-foreground mt-1">
                   Task IDs will be auto-generated from the project name (e.g. TS-001)
                 </p>
-              </div>
+</div>
               <div>
                 <label className="text-[10px] font-mono uppercase text-muted-foreground">
                   Client Name
@@ -722,6 +741,20 @@ function ProjectSelector() {
                   placeholder="e.g. Acme Corp"
                   className="w-full mt-1 px-3 py-2 rounded-md bg-surface-2 border border-border text-sm focus:outline-none focus:border-primary"
                 />
+              </div>
+              <div>
+                <label className="text-[10px] font-mono uppercase text-muted-foreground">
+                  Repository URL
+                </label>
+                <input
+                  value={form.repoUrl}
+                  onChange={(e) => setForm((p) => ({ ...p, repoUrl: e.target.value }))}
+                  placeholder="e.g. https://github.com/org/repo"
+                  className="w-full mt-1 px-3 py-2 rounded-md bg-surface-2 border border-border text-sm focus:outline-none focus:border-primary"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Opens in the sidebar via the GitHub icon.
+                </p>
               </div>
               <div>
                 <label className="text-[10px] font-mono uppercase text-muted-foreground">
@@ -795,6 +828,20 @@ function ProjectSelector() {
                   placeholder="e.g. Acme Corp"
                   className="w-full mt-1 px-3 py-2 rounded-md bg-surface-2 border border-border text-sm focus:outline-none focus:border-primary"
                 />
+              </div>
+              <div>
+                <label className="text-[10px] font-mono uppercase text-muted-foreground">
+                  Repository URL
+                </label>
+                <input
+                  value={manageForm.repoUrl}
+                  onChange={(e) => setManageForm((p) => ({ ...p, repoUrl: e.target.value }))}
+                  placeholder="e.g. https://github.com/org/repo"
+                  className="w-full mt-1 px-3 py-2 rounded-md bg-surface-2 border border-border text-sm focus:outline-none focus:border-primary"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Opens in the sidebar via the GitHub icon.
+                </p>
               </div>
               <div>
                 <label className="text-[10px] font-mono uppercase text-muted-foreground">

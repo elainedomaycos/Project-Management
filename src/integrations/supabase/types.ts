@@ -161,6 +161,7 @@ export type Database = {
           client_name: string;
           end_users: string[] | null;
           modules: string[] | null;
+          repo_url: string | null;
           created_at: string;
           archived_at: string | null;
         };
@@ -171,6 +172,7 @@ export type Database = {
           client_name?: string;
           end_users?: string[] | null;
           modules?: string[] | null;
+          repo_url?: string | null;
           created_at: string;
           archived_at?: string | null;
         };
@@ -181,6 +183,7 @@ export type Database = {
           client_name?: string;
           end_users?: string[] | null;
           modules?: string[] | null;
+          repo_url?: string | null;
           created_at?: string;
           archived_at?: string | null;
         };

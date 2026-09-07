@@ -79,6 +79,7 @@ export type Project = {
   clientName: string;
   endUsers: string[];
   modules: string[];
+  repoUrl: string;
   archivedAt: string | null;
   finalDefenseDate: string;
   adviserId: string | null;
@@ -115,6 +116,7 @@ type ProjectContextType = {
     clientName: string;
     endUsers: string[];
     modules: string[];
+    repoUrl?: string;
   }) => void;
   updateProject: (
     id: string,
@@ -122,6 +124,7 @@ type ProjectContextType = {
       clientName?: string;
       endUsers?: string[];
       modules?: string[];
+      repoUrl?: string;
       finalDefenseDate?: string;
       adviserId?: string | null;
       healthStatus?: HealthStatus;
@@ -311,6 +314,7 @@ type ProjectRow = {
   client_name: string | null;
   end_users: string[] | null;
   modules: string[] | null;
+  repo_url: string | null;
   archived_at: string | null;
   final_defense_date?: string | null;
   adviser_id?: string | null;
@@ -327,6 +331,7 @@ function fromDbProject(r: ProjectRow): Project {
     clientName: r.client_name || "",
     endUsers: r.end_users || [],
     modules: r.modules || [],
+    repoUrl: r.repo_url || "",
     archivedAt: r.archived_at || null,
     finalDefenseDate: r.final_defense_date || "",
     adviserId: r.adviser_id || null,
@@ -701,6 +706,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     clientName: string;
     endUsers: string[];
     modules: string[];
+    repoUrl?: string;
   }) {
     const id = data.name
       .toLowerCase()
@@ -721,6 +727,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       clientName: data.clientName,
       endUsers: data.endUsers,
       modules: data.modules,
+      repoUrl: data.repoUrl?.trim() ?? "",
       archivedAt: null,
       finalDefenseDate: "",
       adviserId: null,
@@ -741,6 +748,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
           client_name: data.clientName || "",
           end_users: data.endUsers ?? [],
           modules: data.modules ?? [],
+          repo_url: data.repoUrl?.trim() || null,
         });
       if (res?.error) {
         console.error("[addProject] Supabase error:", res.error);
@@ -763,6 +771,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       clientName?: string;
       endUsers?: string[];
       modules?: string[];
+      repoUrl?: string;
       finalDefenseDate?: string;
       adviserId?: string | null;
       healthStatus?: HealthStatus;
@@ -776,6 +785,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     if (updates.clientName !== undefined) dbUpdates.client_name = updates.clientName;
     if (updates.endUsers !== undefined) dbUpdates.end_users = updates.endUsers;
     if (updates.modules !== undefined) dbUpdates.modules = updates.modules;
+    if (updates.repoUrl !== undefined) dbUpdates.repo_url = updates.repoUrl.trim() || null;
     if (updates.finalDefenseDate !== undefined)
       dbUpdates.final_defense_date = updates.finalDefenseDate;
     if (updates.adviserId !== undefined) dbUpdates.adviser_id = updates.adviserId || null;
