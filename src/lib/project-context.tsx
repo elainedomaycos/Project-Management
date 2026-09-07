@@ -354,6 +354,17 @@ function fromDbProject(r: ProjectRow): Project {
   };
 }
 
+function normalizeCachedProject(p: Project & { repoUrl?: string }): Project {
+  return {
+    ...p,
+    repos: Array.isArray(p.repos)
+      ? p.repos
+      : p.repoUrl?.trim()
+        ? [{ label: "Repository", url: p.repoUrl }]
+        : [],
+  };
+}
+
 function getInitialProject(projects: Project[]): Project | null {
   if (typeof window === "undefined") return projects[0] ?? null;
   const saved = localStorage.getItem("selected-project-id");
@@ -437,7 +448,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     async function load() {
       const cached = readCache<CachedProjectData>("project-data");
       if (cached) {
-        setAllProjects(cached.projects);
+        setAllProjects((cached.projects ?? []).map(normalizeCachedProject));
         setAllTasks(cached.tasks);
         setAllDefects(cached.defects ?? []);
         setMemberships(cached.memberships ?? []);
@@ -714,10 +725,11 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       fresh.endUsers.some((u, i) => u !== currentProject.endUsers[i]) ||
       fresh.modules.length !== currentProject.modules.length ||
       fresh.modules.some((m, i) => m !== currentProject.modules[i]) ||
-      fresh.repos.length !== currentProject.repos.length ||
-      fresh.repos.some(
+      (fresh.repos ?? []).length !== (currentProject.repos ?? []).length ||
+      (fresh.repos ?? []).some(
         (r, i) =>
-          r.label !== currentProject.repos[i]?.label || r.url !== currentProject.repos[i]?.url,
+          r.label !== (currentProject.repos ?? [])[i]?.label ||
+          r.url !== (currentProject.repos ?? [])[i]?.url,
       ) ||
       fresh.name !== currentProject.name ||
       fresh.prefix !== currentProject.prefix

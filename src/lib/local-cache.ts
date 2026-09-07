@@ -1,4 +1,4 @@
-const PREFIX = "tt:v1:";
+const PREFIX = "tt:v2:";
 
 export function readCache<T>(key: string): T | null {
   if (typeof window === "undefined") return null;

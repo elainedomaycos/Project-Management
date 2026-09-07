@@ -729,7 +729,7 @@ function ProjectSelector() {
           </select>
           <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 size-3 text-muted-foreground pointer-events-none" />
         </div>
-        {currentProject && currentProject.repos.length > 0 && (
+        {currentProject && (currentProject.repos?.length ?? 0) > 0 && (
           <div className="relative">
             <button
               onClick={(e) => {
@@ -745,7 +745,7 @@ function ProjectSelector() {
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setManageReposOpen(false)} />
                 <div className="absolute left-1/2 -translate-x-1/2 top-9 z-50 min-w-56 bg-popover border border-border rounded-md shadow-lg p-1.5">
-                  {currentProject.repos.map((r) => (
+                  {(currentProject.repos ?? []).map((r) => (
                     <a
                       key={r.label}
                       href={r.url}
