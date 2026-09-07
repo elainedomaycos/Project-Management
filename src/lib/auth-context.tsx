@@ -4,8 +4,23 @@ import { readCache, writeCache } from "@/lib/local-cache";
 import type { User } from "@supabase/supabase-js";
 
 // Capstone hierarchy: admin (block coordinator) > leader > developer > viewer.
-// Adviser is a parallel reviewer role scoped to assigned projects.
-export type UserRole = "admin" | "adviser" | "leader" | "developer" | "viewer";
+// `adviser` is a legacy alias for admin — profiles with role 'adviser' are
+// normalized to 'admin' so the rest of the app only deals with admins.
+export type UserRole = "admin" | "leader" | "developer" | "viewer";
+
+export function normalizeRole(raw: string | null | undefined): UserRole {
+  switch (raw) {
+    case "admin":
+    case "adviser":
+      return "admin";
+    case "leader":
+      return "leader";
+    case "viewer":
+      return "viewer";
+    default:
+      return "developer";
+  }
+}
 
 export type Profile = {
   id: string;
@@ -230,14 +245,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .from("profiles")
           .upsert({ id: userId, display_name: profileName, role: "admin", email });
       } else {
-        const rawRole = data.role as UserRole | undefined;
-        const role: UserRole =
-          rawRole === "admin" ||
-          rawRole === "adviser" ||
-          rawRole === "leader" ||
-          rawRole === "viewer"
-            ? rawRole
-            : "developer";
+        const role: UserRole = normalizeRole(data.role);
         finalProfile = {
           ...data,
           name: profileName,
@@ -259,7 +267,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             .eq("email", email.toLowerCase())
             .maybeSingle();
           if (invite) {
-            role = invite.role as UserRole;
+            role = normalizeRole(invite.role);
             inviteName = invite.name;
           }
         } catch {
@@ -310,14 +318,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             .eq("email", email.toLowerCase())
             .maybeSingle();
           if (invite) {
-            const inviteRole = invite.role as UserRole;
-            role =
-              inviteRole === "admin" ||
-              inviteRole === "adviser" ||
-              inviteRole === "leader" ||
-              inviteRole === "viewer"
-                ? inviteRole
-                : "developer";
+            const inviteRole = normalizeRole(invite.role);
+            role = inviteRole;
             profileName = invite.name;
           }
         }

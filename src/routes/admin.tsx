@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/console";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/integrations/supabase/client";
-import { Users, Shield, Code2, FlaskConical, GraduationCap } from "lucide-react";
+import { Users, Shield, Code2, FlaskConical } from "lucide-react";
 import type { UserRole } from "@/lib/auth-context";
 import { toast } from "sonner";
 
@@ -170,8 +170,6 @@ function AdminPage() {
     switch (r) {
       case "admin":
         return <Shield className="size-3.5" />;
-      case "adviser":
-        return <GraduationCap className="size-3.5" />;
       case "leader":
         return <Shield className="size-3.5 opacity-60" />;
       case "developer":

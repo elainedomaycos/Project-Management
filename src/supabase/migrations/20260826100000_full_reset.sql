@@ -348,9 +348,13 @@ CREATE TRIGGER on_auth_user_created
 CREATE OR REPLACE FUNCTION public.is_capstone_admin()
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT EXISTS (
-    SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'
+    SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'adviser')
   );
 $$;
+
+-- Admin == adviser: convert any legacy adviser rows to admin so the rest of
+-- the schema can treat admin as the single elevated role.
+UPDATE public.profiles SET role = 'admin' WHERE role = 'adviser';
 
 -- ---------------------------------------------------------------------------
 -- RBAC: get the caller's role in a group
@@ -731,7 +735,10 @@ DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.timeline_items;
 DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.credentials; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.defense_deliverables; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.defense_subtasks; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.feedback; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE 
+public.feedback; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE 
+public.group_memberships; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ============================================================================
 -- PART 7: SEED DATA

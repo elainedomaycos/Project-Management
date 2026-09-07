@@ -7,7 +7,6 @@ export type GroupRole = "leader" | "developer" | "viewer";
 
 export const SYSTEM_ROLE_LABELS: Record<UserRole, string> = {
   admin: "Block Coordinator",
-  adviser: "Adviser",
   leader: "Group Leader",
   developer: "Member",
   viewer: "Viewer",
@@ -24,7 +23,6 @@ const ROLE_RANK: Record<UserRole, number> = {
   leader: 3,
   developer: 2,
   viewer: 1,
-  adviser: 0, // reviewer role — access comes from project assignment, not rank
 };
 
 export function atLeast(role: UserRole | null | undefined, min: UserRole): boolean {

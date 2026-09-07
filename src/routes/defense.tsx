@@ -31,7 +31,7 @@ export const Route = createFileRoute("/defense")({
       { title: "Final Defense · Project Management" },
       {
         name: "description",
-        content: "Final defense roadmap with deliverables and adviser feedback.",
+        content: "Final defense roadmap with deliverables and admin feedback.",
       },
     ],
   }),
@@ -139,10 +139,10 @@ function timeAgo(iso: string): string {
 
 function DefensePage() {
   const { currentProject, updateProject, developers, tasks } = useProject();
-  const { isAdmin, isLeader, isViewer, profile } = useAuth();
+  const { isAdmin, isLeader, isViewer } = useAuth();
   const pid = currentProject?.id ?? null;
   const canManage = isAdmin || isLeader;
-  const canGiveFeedback = profile?.role === "adviser" || isAdmin;
+  const canGiveFeedback = isAdmin;
 
   const [items, setItems] = useState<Deliverable[]>([]);
   const [feedback, setFeedback] = useState<FeedbackRow[]>([]);
@@ -428,7 +428,7 @@ function DefensePage() {
       .insert({
         project_id: pid,
         title,
-        description: `[Adviser feedback - ${item.chapter}] ${item.content}`,
+        description: `[Admin feedback - ${item.chapter}] ${item.content}`,
         sort_order: items.length,
       });
     if (error) toast.error(error.message);
@@ -798,7 +798,10 @@ function DefensePage() {
                                 <>
                                   <button
                                     onClick={() => {
-                                      setLinkForms((prev) => ({ ...prev, [item.id]: item.link_url ?? "" }));
+                                      setLinkForms((prev) => ({
+                                        ...prev,
+                                        [item.id]: item.link_url ?? "",
+                                      }));
                                       setExpanded((prev) => new Set(prev).add(item.id));
                                     }}
                                     className="p-1 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 shrink-0"
@@ -1008,12 +1011,12 @@ function DefensePage() {
           )}
         </section>
 
-        {/* ------------------------------ Adviser feedback */}
+        {/* ------------------------------ Admin feedback */}
         <section>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
               <MessageSquareWarning className="size-3.5" />
-              Adviser Feedback
+              Admin Feedback
               {openFeedback > 0 && <span className="text-warning">({openFeedback} open)</span>}
             </h2>
           </div>

@@ -89,12 +89,17 @@ export type Project = {
 
 export type AppView = "pm" | "developer" | "qa" | "client";
 
+type GroupMembership = {
+  projectId: string;
+  userName: string;
+  role: "leader" | "developer" | "viewer";
+};
+
 type CachedProjectData = {
   projects: Project[];
   tasks: Task[];
   defects: Defect[];
-  developers: string[];
-  qaUsers: string[];
+  memberships: GroupMembership[];
 };
 
 type ProjectContextType = {
@@ -388,8 +393,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   );
   const [currentView, setCurrentView] = useState<AppView>("pm");
   const [currentDeveloper, setCurrentDeveloper] = useState("");
-  const [developers, setDeveloperState] = useState<string[]>([]);
-  const [qaUsers, setQaState] = useState<string[]>([]);
+  const [memberships, setMemberships] = useState<GroupMembership[]>([]);
   const [loading, setLoading] = useState(true);
 
   const lastToast = useRef<string | number | null>(null);
@@ -410,6 +414,14 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     return !proj?.archivedAt;
   });
 
+  const projectId = currentProject?.id ?? null;
+  const developers = memberships
+    .filter((m) => m.projectId === projectId && (m.role === "leader" || m.role === "developer"))
+    .map((m) => m.userName);
+  const qaUsers = memberships
+    .filter((m) => m.projectId === projectId && m.role === "viewer")
+    .map((m) => m.userName);
+
   // Load from Supabase — re-fetch when the user first becomes available
   // (on mount the user may not be authenticated yet, so RLS returns nothing)
   useEffect(() => {
@@ -419,31 +431,38 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         setAllProjects(cached.projects);
         setAllTasks(cached.tasks);
         setAllDefects(cached.defects ?? []);
-        setDeveloperState(cached.developers);
-        setQaState(cached.qaUsers);
+        setMemberships(cached.memberships ?? []);
         setLoading(false);
       }
       try {
-        const [projRes, taskRes, defectRes, profilesRes] = await Promise.all([
+        const [projRes, taskRes, defectRes, profilesRes, membershipsRes] = await Promise.all([
           db().from("projects").select("*").order("name"),
           db().from("tasks").select("*"),
           db().from("defects").select("*"),
-          db().from("profiles").select("display_name, role"),
+          db().from("profiles").select("id, display_name"),
+          db().from("group_memberships").select("project_id, user_id, role"),
         ]);
         if (projRes.data?.length) setAllProjects(projRes.data.map(fromDbProject));
         if (taskRes.data) setAllTasks(taskRes.data.map(fromDbTask));
         if (defectRes.data) setAllDefects(defectRes.data.map(fromDbDefect));
 
-        // Derive developer / QA lists from profiles table by role
-        const profileList: { display_name: string; role: string }[] = profilesRes.data ?? [];
-        const devs = profileList
-          .filter((p) => p.role === "developer" && p.display_name)
-          .map((p) => p.display_name);
-        const qas = profileList
-          .filter((p) => p.role === "viewer" && p.display_name)
-          .map((p) => p.display_name);
-        setDeveloperState(devs);
-        setQaState(qas);
+        if (profilesRes.data && membershipsRes.data) {
+          const nameById = new Map<string, string>();
+          for (const p of profilesRes.data) {
+            if (p.display_name) nameById.set(p.id, p.display_name);
+          }
+          const memList: GroupMembership[] = [];
+          for (const m of membershipsRes.data) {
+            const userName = nameById.get(m.user_id);
+            if (!userName) continue;
+            memList.push({
+              projectId: m.project_id,
+              userName,
+              role: m.role,
+            });
+          }
+          setMemberships(memList);
+        }
       } catch (e) {
         console.warn("Failed to load from Supabase, using defaults", e);
       } finally {
@@ -563,6 +582,40 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Live-update group memberships (assignments made in Admin/manage-users modals
+  // by other users) so developer/QA dropdowns stay in sync
+  useEffect(() => {
+    const channel = supabase
+      .channel(`memberships-changes:${++realtimeSeq}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "group_memberships" }, () => {
+        void (async () => {
+          try {
+            const [profilesRes, membershipsRes] = await Promise.all([
+              db().from("profiles").select("id, display_name"),
+              db().from("group_memberships").select("project_id, user_id, role"),
+            ]);
+            const nameById = new Map<string, string>();
+            for (const p of profilesRes.data ?? []) {
+              if (p.display_name) nameById.set(p.id, p.display_name);
+            }
+            const memList: GroupMembership[] = [];
+            for (const m of membershipsRes.data ?? []) {
+              const userName = nameById.get(m.user_id);
+              if (!userName) continue;
+              memList.push({ projectId: m.project_id, userName, role: m.role });
+            }
+            setMemberships(memList);
+          } catch (err) {
+            console.warn("[memberships-realtime]", err);
+          }
+        })();
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   // Nudge the auto-health calculator whenever deliverables / sub-tasks change
   const [healthTick, setHealthTick] = useState(0);
   useEffect(() => {
@@ -668,10 +721,9 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       projects: allProjects,
       tasks: allTasks,
       defects: allDefects,
-      developers,
-      qaUsers,
+      memberships,
     });
-  }, [allProjects, allTasks, allDefects, developers, qaUsers, loading]);
+  }, [allProjects, allTasks, allDefects, memberships, loading]);
 
   // When fresh projects load from Supabase, re-validate the selection
   const prevProjectsLen = useRef(allProjects.length);
@@ -1114,31 +1166,105 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     };
   }
 
-  const addDeveloper = useCallback((name: string) => {
-    if (!name.trim()) return;
-    setDeveloperState((prev) => {
-      const key = name.trim().toLowerCase();
-      if (prev.some((d) => d.toLowerCase() === key)) return prev;
-      return [...prev, name.trim()];
-    });
-  }, []);
+  const upsertMember = useCallback(
+    async (name: string, role: "developer" | "viewer") => {
+      if (!currentProject) return;
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      try {
+        const { data } = await db()
+          .from("profiles")
+          .select("id")
+          .ilike("display_name", trimmed.trim())
+          .maybeSingle();
+        if (!data?.id) {
+          notify("error", `No user found with name "${trimmed}"`);
+          return;
+        }
+        await db().from("group_memberships").upsert({
+          project_id: currentProject.id,
+          user_id: data.id,
+          role,
+        });
+        setMemberships((prev) => {
+          const next = prev.filter(
+            (m) => m.projectId !== currentProject.id || m.userName !== trimmed,
+          );
+          return [...next, { projectId: currentProject.id, userName: trimmed, role }];
+        });
+        notify("success", `Added ${trimmed} to ${currentProject.name}`);
+      } catch (err) {
+        console.error("[addMember]", err);
+        notify(
+          "error",
+          `Failed to add ${trimmed}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    },
+    [currentProject],
+  );
 
-  const removeDeveloper = useCallback((name: string) => {
-    setDeveloperState((prev) => prev.filter((d) => d !== name));
-  }, []);
+  const removeMember = useCallback(
+    async (name: string) => {
+      if (!currentProject) return;
+      const trimmed = name.trim();
+      setMemberships((prev) =>
+        prev.filter((m) => m.projectId !== currentProject.id || m.userName !== trimmed),
+      );
+      try {
+        const { data } = await db()
+          .from("profiles")
+          .select("id")
+          .ilike("display_name", trimmed)
+          .maybeSingle();
+        if (data?.id) {
+          await db()
+            .from("group_memberships")
+            .delete()
+            .eq("project_id", currentProject.id)
+            .eq("user_id", data.id);
+        } else {
+          return;
+        }
+        notify("success", `Removed ${trimmed} from ${currentProject.name}`);
+      } catch (err) {
+        console.error("[removeMember]", err);
+        notify(
+          "error",
+          `Failed to remove ${trimmed}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    },
+    [currentProject],
+  );
 
-  const addQaUser = useCallback((name: string) => {
-    if (!name.trim()) return;
-    setQaState((prev) => {
-      const key = name.trim().toLowerCase();
-      if (prev.some((q) => q.toLowerCase() === key)) return prev;
-      return [...prev, name.trim()];
-    });
-  }, []);
+  const addDeveloper = useCallback(
+    (name: string) => {
+      void upsertMember(name, "developer");
+    },
+    [upsertMember],
+  );
 
-  const removeQaUser = useCallback((name: string) => {
-    setQaState((prev) => prev.filter((d) => d !== name));
-  }, []);
+  const removeDeveloper = useCallback(
+    (name: string) => {
+      void removeMember(name);
+    },
+    [removeMember],
+  );
+
+  const addQaUser = useCallback(
+    (name: string) => {
+      void upsertMember(name, "viewer");
+    },
+    [upsertMember],
+  );
+
+  const removeQaUser = useCallback(
+    (name: string) => {
+      void removeMember(name);
+    },
+    [removeMember],
+  );
 
   return (
     <ProjectContext.Provider

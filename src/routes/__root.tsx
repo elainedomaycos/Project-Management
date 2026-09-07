@@ -276,9 +276,7 @@ function AuthGate({ children }: { children: ReactNode }) {
           <div className="h-1 w-full overflow-hidden rounded-full bg-surface-2">
             <div className="h-full w-2/5 rounded-full bg-primary animate-[loading_1.4s_ease-in-out_infinite]" />
           </div>
-          <p className="text-center text-xs text-muted-foreground animate-pulse">
-            Loading...
-          </p>
+          <p className="text-center text-xs text-muted-foreground animate-pulse">Loading...</p>
         </div>
       </div>
     );
@@ -635,7 +633,9 @@ function ProjectSelector() {
         <div className="relative flex-1">
           <select
             value={currentProject?.id ?? "__all__"}
-            onChange={(e) => setCurrentProject(e.target.value === "__all__" ? null : e.target.value)}
+            onChange={(e) =>
+              setCurrentProject(e.target.value === "__all__" ? null : e.target.value)
+            }
             className="w-full appearance-none px-3 py-1.5 rounded-md bg-surface-2 border border-border text-xs font-medium focus:outline-none focus:border-primary cursor-pointer"
           >
             <option value="__all__">All Projects</option>
@@ -730,7 +730,7 @@ function ProjectSelector() {
                 <p className="text-[10px] text-muted-foreground mt-1">
                   Task IDs will be auto-generated from the project name (e.g. TS-001)
                 </p>
-</div>
+              </div>
               <div>
                 <label className="text-[10px] font-mono uppercase text-muted-foreground">
                   Client Name
