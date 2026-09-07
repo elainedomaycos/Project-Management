@@ -499,7 +499,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [loading, profile?.id, allProjects.length]);
+  }, [loading, profile?.id, allProjects]);
 
   // Live-update tasks from realtime changes so edits by other users show up immediately
   useEffect(() => {
@@ -738,6 +738,9 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     } else if (currentProject && !projects.find((p) => p.id === currentProject.id)) {
       setCurrentProjectState(projects[0] ?? null);
     }
+    // Guarded by prevProjectsLen: only re-validate when the project list
+    // actually changes, so omitting derived `projects`/`currentProject` is intentional.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allProjects]);
 
   function setCurrentProject(id: string | null) {
@@ -915,7 +918,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       .catch(() => notify("error", "Failed to delete project"));
   }
 
-  function addTask(t: NewTaskInput) {
+  async function addTask(t: NewTaskInput) {
     const tid = nextTaskId(t.projectId);
     const slug = t.title
       .toLowerCase()
@@ -934,17 +937,24 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       timelineItemId: t.timelineItemId || "",
     };
     setAllTasks((prev) => [...prev, task]);
-    db()
-      .from("tasks")
-      .insert(toDbTask(task))
-      .then(() => notify("success", "Task created"))
-      .catch(() => notify("error", "Failed to create task"));
-    if (task.developer) {
-      notifyDeveloper(task.developer, `New task ${task.taskId}: ${task.title}`, task.id);
+    try {
+      const res = await db().from("tasks").insert(toDbTask(task));
+      if (res?.error) {
+        setAllTasks((prev) => prev.filter((t) => t.id !== task.id));
+        notify("error", `Failed to create task: ${res.error.message}`);
+        return;
+      }
+      notify("success", "Task created");
+      if (task.developer) {
+        notifyDeveloper(task.developer, `New task ${task.taskId}: ${task.title}`, task.id);
+      }
+    } catch (err: unknown) {
+      setAllTasks((prev) => prev.filter((t) => t.id !== task.id));
+      notify("error", `Failed to create task: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
-  function updateTask(id: string, updates: Partial<Task>) {
+  async function updateTask(id: string, updates: Partial<Task>) {
     const prevTask = allTasks.find((t) => t.id === id);
     setAllTasks((prev) =>
       prev.map((t) => {
@@ -975,25 +985,36 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       else if (k === "timelineItemId") dbUpdates.timeline_item_id = v;
       else dbUpdates[k] = v;
     }
-    db()
-      .from("tasks")
-      .update(dbUpdates)
-      .eq("id", id)
-      .then(() => {
-        if (taskEditToastTimer.current) clearTimeout(taskEditToastTimer.current);
-        taskEditToastTimer.current = setTimeout(() => notify("success", "Task updated"), 600);
-      })
-      .catch(() => notify("error", "Failed to update task"));
+    try {
+      const res = await db().from("tasks").update(dbUpdates).eq("id", id);
+      if (taskEditToastTimer.current) clearTimeout(taskEditToastTimer.current);
+      if (res?.error) {
+        setAllTasks((prev) => prev.map((t) => (t.id === id && prevTask ? prevTask : t)));
+        notify("error", `Failed to update task: ${res.error.message}`);
+        return;
+      }
+      taskEditToastTimer.current = setTimeout(() => notify("success", "Task updated"), 600);
+    } catch (err: unknown) {
+      setAllTasks((prev) => prev.map((t) => (t.id === id && prevTask ? prevTask : t)));
+      notify("error", `Failed to update task: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
-  function removeTask(id: string) {
+  async function removeTask(id: string) {
+    const removed = allTasks.filter((t) => t.id === id);
     setAllTasks((prev) => prev.filter((t) => t.id !== id));
-    db()
-      .from("tasks")
-      .delete()
-      .eq("id", id)
-      .then(() => notify("success", "Task deleted"))
-      .catch(() => notify("error", "Failed to delete task"));
+    try {
+      const res = await db().from("tasks").delete().eq("id", id);
+      if (res?.error) {
+        setAllTasks((prev) => [...prev.filter((t) => t.id !== id), ...removed]);
+        notify("error", `Failed to delete task: ${res.error.message}`);
+        return;
+      }
+      notify("success", "Task deleted");
+    } catch (err: unknown) {
+      setAllTasks((prev) => [...prev.filter((t) => t.id !== id), ...removed]);
+      notify("error", `Failed to delete task: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   function nextDefectId(projectId: string): string {
@@ -1181,11 +1202,16 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
           notify("error", `No user found with name "${trimmed}"`);
           return;
         }
-        await db().from("group_memberships").upsert({
+        const upsertRes = await db().from("group_memberships").upsert({
           project_id: currentProject.id,
           user_id: data.id,
           role,
         });
+        if (upsertRes.error) {
+          console.error("[addMember]", upsertRes.error);
+          notify("error", `Failed to add ${trimmed}: ${upsertRes.error.message}`);
+          return;
+        }
         setMemberships((prev) => {
           const next = prev.filter(
             (m) => m.projectId !== currentProject.id || m.userName !== trimmed,
@@ -1208,24 +1234,26 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     async (name: string) => {
       if (!currentProject) return;
       const trimmed = name.trim();
-      setMemberships((prev) =>
-        prev.filter((m) => m.projectId !== currentProject.id || m.userName !== trimmed),
-      );
       try {
         const { data } = await db()
           .from("profiles")
           .select("id")
           .ilike("display_name", trimmed)
           .maybeSingle();
-        if (data?.id) {
-          await db()
-            .from("group_memberships")
-            .delete()
-            .eq("project_id", currentProject.id)
-            .eq("user_id", data.id);
-        } else {
+        if (!data?.id) return;
+        const deleteRes = await db()
+          .from("group_memberships")
+          .delete()
+          .eq("project_id", currentProject.id)
+          .eq("user_id", data.id);
+        if (deleteRes.error) {
+          console.error("[removeMember]", deleteRes.error);
+          notify("error", `Failed to remove ${trimmed}: ${deleteRes.error.message}`);
           return;
         }
+        setMemberships((prev) =>
+          prev.filter((m) => m.projectId !== currentProject.id || m.userName !== trimmed),
+        );
         notify("success", `Removed ${trimmed} from ${currentProject.name}`);
       } catch (err) {
         console.error("[removeMember]", err);

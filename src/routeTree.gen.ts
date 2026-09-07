@@ -17,6 +17,7 @@ import { Route as ClientRouteImport } from './routes/client'
 import { Route as CredentialsRouteImport } from './routes/credentials'
 import { Route as DefenseRouteImport } from './routes/defense'
 import { Route as DeveloperRouteImport } from './routes/developer'
+import { Route as MembersRouteImport } from './routes/members'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as QaRouteImport } from './routes/qa'
 import { Route as TasksRouteImport } from './routes/tasks'
@@ -62,6 +63,11 @@ const DeveloperRoute = DeveloperRouteImport.update({
   path: '/developer',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MembersRoute = MembersRouteImport.update({
+  id: '/members',
+  path: '/members',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProfileRoute = ProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
@@ -92,6 +98,7 @@ export interface FileRoutesByFullPath {
   '/credentials': typeof CredentialsRoute
   '/defense': typeof DefenseRoute
   '/developer': typeof DeveloperRoute
+  '/members': typeof MembersRoute
   '/profile': typeof ProfileRoute
   '/qa': typeof QaRoute
   '/tasks': typeof TasksRoute
@@ -106,6 +113,7 @@ export interface FileRoutesByTo {
   '/credentials': typeof CredentialsRoute
   '/defense': typeof DefenseRoute
   '/developer': typeof DeveloperRoute
+  '/members': typeof MembersRoute
   '/profile': typeof ProfileRoute
   '/qa': typeof QaRoute
   '/tasks': typeof TasksRoute
@@ -121,6 +129,7 @@ export interface FileRoutesById {
   '/credentials': typeof CredentialsRoute
   '/defense': typeof DefenseRoute
   '/developer': typeof DeveloperRoute
+  '/members': typeof MembersRoute
   '/profile': typeof ProfileRoute
   '/qa': typeof QaRoute
   '/tasks': typeof TasksRoute
@@ -137,6 +146,7 @@ export interface FileRouteTypes {
     | '/credentials'
     | '/defense'
     | '/developer'
+    | '/members'
     | '/profile'
     | '/qa'
     | '/tasks'
@@ -151,6 +161,7 @@ export interface FileRouteTypes {
     | '/credentials'
     | '/defense'
     | '/developer'
+    | '/members'
     | '/profile'
     | '/qa'
     | '/tasks'
@@ -165,6 +176,7 @@ export interface FileRouteTypes {
     | '/credentials'
     | '/defense'
     | '/developer'
+    | '/members'
     | '/profile'
     | '/qa'
     | '/tasks'
@@ -180,6 +192,7 @@ export interface RootRouteChildren {
   CredentialsRoute: typeof CredentialsRoute
   DefenseRoute: typeof DefenseRoute
   DeveloperRoute: typeof DeveloperRoute
+  MembersRoute: typeof MembersRoute
   ProfileRoute: typeof ProfileRoute
   QaRoute: typeof QaRoute
   TasksRoute: typeof TasksRoute
@@ -244,6 +257,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DeveloperRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/members': {
+      id: '/members'
+      path: '/members'
+      fullPath: '/members'
+      preLoaderRoute: typeof MembersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/profile': {
       id: '/profile'
       path: '/profile'
@@ -284,6 +304,7 @@ const rootRouteChildren: RootRouteChildren = {
   CredentialsRoute: CredentialsRoute,
   DefenseRoute: DefenseRoute,
   DeveloperRoute: DeveloperRoute,
+  MembersRoute: MembersRoute,
   ProfileRoute: ProfileRoute,
   QaRoute: QaRoute,
   TasksRoute: TasksRoute,

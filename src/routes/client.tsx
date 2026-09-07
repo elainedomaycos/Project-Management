@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/console";
-import { useProject, type Task } from "@/lib/project-context";
+import { useProject, type Project, type Task } from "@/lib/project-context";
 import {
   CheckCircle2,
   Circle,
@@ -87,7 +87,7 @@ function ProgressRing({
   );
 }
 
-function ProjectView({ project }: { project: any }) {
+function ProjectView({ project }: { project: Project }) {
   const { tasks, getAnalytics } = useProject();
   const a = getAnalytics(project.id);
   const projectTasks = tasks.filter((t) => t.projectId === project.id);
@@ -162,7 +162,10 @@ function ProjectView({ project }: { project: any }) {
           ) : (
             <div className="space-y-2">
               {activeTasks.map((t) => (
-                <div key={t.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-surface-2 transition-colors">
+                <div
+                  key={t.id}
+                  className="flex items-center gap-2 p-2 rounded-lg hover:bg-surface-2 transition-colors"
+                >
                   <StatusIcon status={t.status} />
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-medium truncate">{t.title}</div>
@@ -181,7 +184,10 @@ function ProjectView({ project }: { project: any }) {
                   </div>
                   {t.dueDate && (
                     <span className="text-[9px] font-mono text-muted-foreground">
-                      {new Date(t.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                      {new Date(t.dueDate).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                      })}
                     </span>
                   )}
                 </div>
@@ -197,7 +203,9 @@ function ProjectView({ project }: { project: any }) {
             Developer Workload
           </h3>
           {devWorkload.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-8">No developers assigned.</p>
+            <p className="text-xs text-muted-foreground text-center py-8">
+              No developers assigned.
+            </p>
           ) : (
             <div className="space-y-3">
               {devWorkload.map((d) => (
@@ -242,7 +250,11 @@ function ProjectView({ project }: { project: any }) {
                       <span className="text-xs font-medium truncate">{d.name}</span>
                       <span
                         className={`text-[10px] font-mono font-bold ${
-                          d.pct >= 80 ? "text-success" : d.pct >= 50 ? "text-warning" : "text-destructive"
+                          d.pct >= 80
+                            ? "text-success"
+                            : d.pct >= 50
+                              ? "text-warning"
+                              : "text-destructive"
                         }`}
                       >
                         {d.pct}%

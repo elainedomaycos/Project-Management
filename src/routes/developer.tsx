@@ -3,17 +3,7 @@ import { PageHeader } from "@/components/console";
 import { useState } from "react";
 import { useProject, type TaskStatus } from "@/lib/project-context";
 import { useAuth } from "@/lib/auth-context";
-import {
-  CheckCircle2,
-  Clock,
-  ArrowRight,
-  Users,
-  Plus,
-  X,
-  ArrowUpDown,
-  Bug,
-  AlertTriangle,
-} from "lucide-react";
+import { CheckCircle2, Clock, ArrowRight, ArrowUpDown, Bug, AlertTriangle } from "lucide-react";
 
 export const Route = createFileRoute("/developer")({
   head: () => ({
@@ -26,25 +16,10 @@ export const Route = createFileRoute("/developer")({
 });
 
 function DeveloperPage() {
-  const {
-    tasks,
-    defects,
-    currentProject,
-    developers,
-    qaUsers,
-    updateTask,
-    updateDefect,
-    addDeveloper,
-    removeDeveloper,
-    addQaUser,
-    removeQaUser,
-  } = useProject();
-  const { profile, isAdmin, isLeader, isViewer } = useAuth();
+  const { tasks, defects, currentProject, developers, updateTask, updateDefect } = useProject();
+  const { profile, isAdmin, isLeader } = useAuth();
   const [filterDev, setFilterDev] = useState("all");
   const [sortBy, setSortBy] = useState<"id-asc" | "id-desc">("id-desc");
-  const [showUsers, setShowUsers] = useState(false);
-  const [newDev, setNewDev] = useState("");
-  const [newQa, setNewQa] = useState("");
 
   const projectTasks = currentProject
     ? tasks.filter((t) => t.projectId === currentProject.id)
@@ -89,17 +64,6 @@ function DeveloperPage() {
       <PageHeader
         crumbs={[{ label: "Project Management" }, { label: "Developer" }]}
         status={{ label: `${activeTasks.length} active tasks`, tone: "info" }}
-        actions={
-          !isViewer && (
-            <button
-              onClick={() => setShowUsers(true)}
-              className="px-3 py-1.5 bg-surface-2 border border-border text-xs font-medium rounded hover:bg-surface-2/80 flex items-center gap-1.5"
-            >
-              <Users className="size-3.5" />
-              Manage Users
-            </button>
-          )
-        }
       />
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
@@ -319,114 +283,6 @@ function DeveloperPage() {
           </div>
         )}
       </div>
-
-      {/* Manage Users Modal */}
-      {showUsers && (
-        <div
-          className="fixed inset-0 z-50 grid place-items-center bg-black/40"
-          onClick={() => setShowUsers(false)}
-        >
-          <div
-            className="w-full max-w-lg bg-card border border-border rounded-lg shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-              <span className="text-sm font-semibold flex items-center gap-2">
-                <Users className="size-4 text-primary" /> Manage Users
-              </span>
-              <button
-                onClick={() => setShowUsers(false)}
-                className="p-1 rounded hover:bg-surface-2 text-muted-foreground"
-              >
-                <X className="size-4" />
-              </button>
-            </div>
-            <div className="p-5 space-y-6 max-h-[70vh] overflow-y-auto">
-              {/* Developers */}
-              <div>
-                <h3 className="text-[10px] font-mono uppercase text-muted-foreground mb-3">
-                  Developers
-                </h3>
-                <div className="flex gap-2 mb-3">
-                  <input
-                    value={newDev}
-                    onChange={(e) => setNewDev(e.target.value)}
-                    placeholder="Add developer..."
-                    className="flex-1 px-3 py-1.5 rounded-md bg-surface-2 border border-border text-xs focus:outline-none focus:border-primary"
-                  />
-                  <button
-                    onClick={() => {
-                      addDeveloper(newDev);
-                      setNewDev("");
-                    }}
-                    disabled={!newDev.trim()}
-                    className="px-3 py-1.5 bg-primary text-primary-foreground text-xs font-bold rounded hover:brightness-110 disabled:opacity-50 flex items-center gap-1"
-                  >
-                    <Plus className="size-3" /> Add
-                  </button>
-                </div>
-                <div className="space-y-1.5">
-                  {developers.map((d) => (
-                    <div
-                      key={d}
-                      className="flex items-center justify-between p-2.5 bg-surface-2 border border-border rounded text-sm"
-                    >
-                      <span>{d}</span>
-                      <button
-                        onClick={() => removeDeveloper(d)}
-                        className="p-1 rounded hover:bg-surface-2 text-muted-foreground hover:text-destructive"
-                      >
-                        <X className="size-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* QA Users */}
-              <div className="pt-4 border-t border-border">
-                <h3 className="text-[10px] font-mono uppercase text-muted-foreground mb-3">
-                  QA Engineers
-                </h3>
-                <div className="flex gap-2 mb-3">
-                  <input
-                    value={newQa}
-                    onChange={(e) => setNewQa(e.target.value)}
-                    placeholder="Add QA..."
-                    className="flex-1 px-3 py-1.5 rounded-md bg-surface-2 border border-border text-xs focus:outline-none focus:border-primary"
-                  />
-                  <button
-                    onClick={() => {
-                      addQaUser(newQa);
-                      setNewQa("");
-                    }}
-                    disabled={!newQa.trim()}
-                    className="px-3 py-1.5 bg-primary text-primary-foreground text-xs font-bold rounded hover:brightness-110 disabled:opacity-50 flex items-center gap-1"
-                  >
-                    <Plus className="size-3" /> Add
-                  </button>
-                </div>
-                <div className="space-y-1.5">
-                  {qaUsers.map((q) => (
-                    <div
-                      key={q}
-                      className="flex items-center justify-between p-2.5 bg-surface-2 border border-border rounded text-sm"
-                    >
-                      <span>{q}</span>
-                      <button
-                        onClick={() => removeQaUser(q)}
-                        className="p-1 rounded hover:bg-surface-2 text-muted-foreground hover:text-destructive"
-                      >
-                        <X className="size-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }

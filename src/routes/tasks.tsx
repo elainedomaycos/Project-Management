@@ -891,7 +891,7 @@ function FeatureTasksPage() {
           onClick={() => setShowNewModal(false)}
         >
           <div
-            className="w-full max-w-lg bg-card border border-border rounded-lg shadow-xl"
+            className="w-full max-w-lg bg-card border border-border rounded-lg shadow-xl max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">

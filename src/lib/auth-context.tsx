@@ -217,6 +217,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       listener?.subscription.unsubscribe();
     };
+    // Auth listener is intentionally mounted once; loadProfile is recreated
+    // each render so it is deliberately excluded from the dependency array.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function loadProfile(userId: string, email: string) {

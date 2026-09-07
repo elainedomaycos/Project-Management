@@ -4,21 +4,8 @@ import { useProject } from "@/lib/project-context";
 import { HEALTH_META, computeAutoHealth, type HealthDeliverable } from "@/lib/health";
 import { supabase } from "@/integrations/supabase/client";
 import { useState, useEffect } from "react";
-import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
-import {
-  ListChecks,
-  CheckCircle2,
-  AlertTriangle,
-  Flame,
-  Shield,
-  Target,
-} from "lucide-react";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
+import { ListChecks, CheckCircle2, AlertTriangle, Flame, Shield, Target } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -119,7 +106,9 @@ function Dashboard() {
   });
 
   // Fetch deliverables for all projects to compute health dynamically
-  const [allDeliverables, setAllDeliverables] = useState<Map<string, HealthDeliverable[]>>(new Map());
+  const [allDeliverables, setAllDeliverables] = useState<Map<string, HealthDeliverable[]>>(
+    new Map(),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -136,7 +125,9 @@ function Dashboard() {
       }
       setAllDeliverables(map);
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -249,8 +240,12 @@ function Dashboard() {
                 <CheckCircle2 className="size-5" />
               </div>
               <div>
-                <div className="text-2xl font-extrabold tracking-tight text-success">{totalDone}</div>
-                <div className="text-[10px] font-mono text-muted-foreground uppercase">Completed</div>
+                <div className="text-2xl font-extrabold tracking-tight text-success">
+                  {totalDone}
+                </div>
+                <div className="text-[10px] font-mono text-muted-foreground uppercase">
+                  Completed
+                </div>
               </div>
             </div>
           </div>
@@ -265,7 +260,9 @@ function Dashboard() {
                 <div className="text-2xl font-extrabold tracking-tight text-warning">
                   {viewTasks.filter((t) => t.status === "doing").length}
                 </div>
-                <div className="text-[10px] font-mono text-muted-foreground uppercase">In Progress</div>
+                <div className="text-[10px] font-mono text-muted-foreground uppercase">
+                  In Progress
+                </div>
               </div>
             </div>
           </div>
@@ -296,9 +293,13 @@ function Dashboard() {
               {currentProject ? `${currentProject.name}` : "All Projects"}
             </p>
             <div className="flex items-center gap-4 mt-3 text-[10px] font-mono text-muted-foreground">
-              <span>Tasks: {totalDone}/{totalTasks}</span>
+              <span>
+                Tasks: {totalDone}/{totalTasks}
+              </span>
               <span className="text-border">|</span>
-              <span>Deliverables: {deliverableStats.completed}/{deliverableStats.total}</span>
+              <span>
+                Deliverables: {deliverableStats.completed}/{deliverableStats.total}
+              </span>
             </div>
           </div>
 
@@ -310,7 +311,9 @@ function Dashboard() {
               Project Health
             </h2>
             {totalProjects === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8 relative">No projects yet.</p>
+              <p className="text-sm text-muted-foreground text-center py-8 relative">
+                No projects yet.
+              </p>
             ) : (
               <div className="flex items-center gap-6 relative">
                 <ResponsiveContainer width={140} height={140}>
@@ -341,7 +344,14 @@ function Dashboard() {
                 </ResponsiveContainer>
                 <div className="space-y-3">
                   {healthData.map((h) => {
-                    const meta = HEALTH_META[h.name === "On Track" ? "on_track" : h.name === "At Risk" ? "at_risk" : "behind"];
+                    const meta =
+                      HEALTH_META[
+                        h.name === "On Track"
+                          ? "on_track"
+                          : h.name === "At Risk"
+                            ? "at_risk"
+                            : "behind"
+                      ];
                     return (
                       <div key={h.name} className="flex items-center gap-2.5 text-xs">
                         <span className={`size-2.5 rounded-full ${meta.dot}`} />
@@ -489,16 +499,13 @@ function Dashboard() {
                         />
                       </div>
                     </div>
-                    {i === 0 && d.pct > 0 && (
-                      <Flame className="size-3.5 text-warning shrink-0" />
-                    )}
+                    {i === 0 && d.pct > 0 && <Flame className="size-3.5 text-warning shrink-0" />}
                   </div>
                 ))}
               </div>
             )}
           </div>
         </div>
-
       </div>
     </>
   );
