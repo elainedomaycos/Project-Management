@@ -161,6 +161,7 @@ export type Database = {
           client_name: string;
           end_users: string[] | null;
           modules: string[] | null;
+          repos: { label: string; url: string }[] | null;
           repo_url: string | null;
           created_at: string;
           archived_at: string | null;
@@ -172,6 +173,7 @@ export type Database = {
           client_name?: string;
           end_users?: string[] | null;
           modules?: string[] | null;
+          repos?: { label: string; url: string }[] | null;
           repo_url?: string | null;
           created_at: string;
           archived_at?: string | null;
@@ -183,6 +185,7 @@ export type Database = {
           client_name?: string;
           end_users?: string[] | null;
           modules?: string[] | null;
+          repos?: { label: string; url: string }[] | null;
           repo_url?: string | null;
           created_at?: string;
           archived_at?: string | null;
@@ -233,7 +236,7 @@ export type Database = {
           story_points: number | null;
           assignee_id: string | null;
           epic: string | null;
-          branch_name: string | null;
+          repo: string | null;
           created_at: string;
           created_by: string;
           updated_at: string;
@@ -248,7 +251,7 @@ export type Database = {
           story_points?: number | null;
           assignee_id?: string | null;
           epic?: string | null;
-          branch_name?: string | null;
+          repo?: string | null;
           created_at?: string;
           created_by: string;
           updated_at?: string;
@@ -263,7 +266,7 @@ export type Database = {
           story_points?: number | null;
           assignee_id?: string | null;
           epic?: string | null;
-          branch_name?: string | null;
+          repo?: string | null;
           created_at?: string;
           created_by?: string;
           updated_at?: string;

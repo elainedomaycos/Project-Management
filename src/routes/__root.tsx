@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 
 import appCss from "../styles.css?url";
-import { ProjectProvider, useProject, type AppView } from "@/lib/project-context";
+import { ProjectProvider, useProject, type ProjectRepo, type AppView } from "@/lib/project-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { TimelineProvider } from "@/lib/timeline-context";
 import { supabase } from "@/integrations/supabase/client";
@@ -574,6 +574,85 @@ function TagDropdown({
   );
 }
 
+function RepoListEditor({
+  repos,
+  onChange,
+}: {
+  repos: ProjectRepo[];
+  onChange: (repos: ProjectRepo[]) => void;
+}) {
+  const [label, setLabel] = useState("");
+  const [url, setUrl] = useState("");
+
+  function add() {
+    const l = label.trim();
+    const u = url.trim();
+    if (!l || !u) return;
+    onChange([...repos, { label: l, url: u }]);
+    setLabel("");
+    setUrl("");
+  }
+
+  return (
+    <div className="mt-1 space-y-2">
+      {repos.length > 0 && (
+        <div className="space-y-1.5 max-h-40 overflow-y-auto">
+          {repos.map((r) => (
+            <div
+              key={r.label}
+              className="flex items-center justify-between gap-2 px-3 py-2 bg-surface-2 border border-border rounded text-xs"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="font-medium text-foreground truncate">{r.label}</div>
+                <div className="text-muted-foreground truncate">{r.url}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => onChange(repos.filter((x) => x.label !== r.label))}
+                className="shrink-0 p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/5"
+                aria-label={`Remove ${r.label}`}
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-1">
+        <input
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Label (e.g. Client System)"
+          className="flex-1 px-2.5 py-1.5 rounded-md bg-surface-2 border border-border text-sm focus:outline-none focus:border-primary min-w-0"
+        />
+        <input
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              add();
+            }
+          }}
+          placeholder="https://..."
+          className="flex-1 px-2.5 py-1.5 rounded-md bg-surface-2 border border-border text-sm focus:outline-none focus:border-primary min-w-0"
+        />
+        <button
+          type="button"
+          onClick={add}
+          className="shrink-0 px-2.5 rounded-md bg-primary text-primary-foreground grid place-items-center hover:brightness-110"
+          aria-label="Add repository"
+        >
+          <Plus className="size-4" />
+        </button>
+      </div>
+      <p className="text-[10px] text-muted-foreground">
+        Repos appear in the sidebar via the GitHub icon; each task can be tagged with one.
+      </p>
+    </div>
+  );
+}
+
 function ProjectSelector() {
   const { projects, currentProject, setCurrentProject, addProject, updateProject, archiveProject } =
     useProject();
@@ -584,15 +663,16 @@ function ProjectSelector() {
     clientName: string;
     endUsers: string[];
     modules: string[];
-    repoUrl: string;
-  }>({ name: "", clientName: "", endUsers: [], modules: [], repoUrl: "" });
+    repos: ProjectRepo[];
+  }>({ name: "", clientName: "", endUsers: [], modules: [], repos: [] });
   const [showManage, setShowManage] = useState(false);
   const [manageForm, setManageForm] = useState<{
     clientName: string;
     endUsers: string[];
     modules: string[];
-    repoUrl: string;
-  }>({ clientName: "", endUsers: [], modules: [], repoUrl: "" });
+    repos: ProjectRepo[];
+  }>({ clientName: "", endUsers: [], modules: [], repos: [] });
+  const [manageReposOpen, setManageReposOpen] = useState(false);
 
   function openManage() {
     if (!currentProject) return;
@@ -600,7 +680,7 @@ function ProjectSelector() {
       clientName: currentProject.clientName || "",
       endUsers: [...(currentProject.endUsers ?? [])],
       modules: [...(currentProject.modules ?? [])],
-      repoUrl: currentProject.repoUrl || "",
+      repos: (currentProject.repos ?? []).map((r) => ({ ...r })),
     });
     setShowManage(true);
   }
@@ -611,7 +691,7 @@ function ProjectSelector() {
       clientName: manageForm.clientName.trim(),
       endUsers: manageForm.endUsers,
       modules: manageForm.modules,
-      repoUrl: manageForm.repoUrl,
+      repos: manageForm.repos.filter((r) => r.url.trim()),
     });
     setShowManage(false);
   }
@@ -623,9 +703,9 @@ function ProjectSelector() {
       clientName: form.clientName.trim(),
       endUsers: form.endUsers,
       modules: form.modules,
-      repoUrl: form.repoUrl,
+      repos: form.repos.filter((r) => r.url.trim()),
     });
-    setForm({ name: "", clientName: "", endUsers: [], modules: [], repoUrl: "" });
+    setForm({ name: "", clientName: "", endUsers: [], modules: [], repos: [] });
     setShowModal(false);
   }
 
@@ -649,16 +729,39 @@ function ProjectSelector() {
           </select>
           <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 size-3 text-muted-foreground pointer-events-none" />
         </div>
-        {currentProject?.repoUrl && (
-          <a
-            href={currentProject.repoUrl}
-            target="_blank"
-            rel="noreferrer"
-            title="Open repository"
-            className="shrink-0 grid place-items-center size-8 rounded-md bg-surface-2 border border-border text-muted-foreground hover:text-foreground hover:border-primary transition-colors"
-          >
-            <Github className="size-3.5" />
-          </a>
+        {currentProject && currentProject.repos.length > 0 && (
+          <div className="relative">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setManageReposOpen((o) => !o);
+              }}
+              title="Open repository"
+              className="shrink-0 grid place-items-center size-8 rounded-md bg-surface-2 border border-border text-muted-foreground hover:text-foreground hover:border-primary transition-colors"
+            >
+              <Github className="size-3.5" />
+            </button>
+            {manageReposOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setManageReposOpen(false)} />
+                <div className="absolute left-1/2 -translate-x-1/2 top-9 z-50 min-w-56 bg-popover border border-border rounded-md shadow-lg p-1.5">
+                  {currentProject.repos.map((r) => (
+                    <a
+                      key={r.label}
+                      href={r.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={() => setManageReposOpen(false)}
+                      className="flex items-center gap-2 px-2.5 py-1.5 rounded text-xs hover:bg-surface-2"
+                    >
+                      <Github className="size-3 text-muted-foreground shrink-0" />
+                      <span className="truncate">{r.label}</span>
+                    </a>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         )}
       </div>
       {isAdmin && (
@@ -746,17 +849,12 @@ function ProjectSelector() {
               </div>
               <div>
                 <label className="text-[10px] font-mono uppercase text-muted-foreground">
-                  Repository URL
+                  Repositories
                 </label>
-                <input
-                  value={form.repoUrl}
-                  onChange={(e) => setForm((p) => ({ ...p, repoUrl: e.target.value }))}
-                  placeholder="e.g. https://github.com/org/repo"
-                  className="w-full mt-1 px-3 py-2 rounded-md bg-surface-2 border border-border text-sm focus:outline-none focus:border-primary"
+                <RepoListEditor
+                  repos={form.repos}
+                  onChange={(repos) => setForm((p) => ({ ...p, repos }))}
                 />
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  Opens in the sidebar via the GitHub icon.
-                </p>
               </div>
               <div>
                 <label className="text-[10px] font-mono uppercase text-muted-foreground">
@@ -833,17 +931,12 @@ function ProjectSelector() {
               </div>
               <div>
                 <label className="text-[10px] font-mono uppercase text-muted-foreground">
-                  Repository URL
+                  Repositories
                 </label>
-                <input
-                  value={manageForm.repoUrl}
-                  onChange={(e) => setManageForm((p) => ({ ...p, repoUrl: e.target.value }))}
-                  placeholder="e.g. https://github.com/org/repo"
-                  className="w-full mt-1 px-3 py-2 rounded-md bg-surface-2 border border-border text-sm focus:outline-none focus:border-primary"
+                <RepoListEditor
+                  repos={manageForm.repos}
+                  onChange={(repos) => setManageForm((p) => ({ ...p, repos }))}
                 />
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  Opens in the sidebar via the GitHub icon.
-                </p>
               </div>
               <div>
                 <label className="text-[10px] font-mono uppercase text-muted-foreground">

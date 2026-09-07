@@ -60,16 +60,21 @@ export type Task = {
   startDate: string;
   completedAt: string;
   priority: "low" | "medium" | "high" | "critical";
-  branch: string;
+  repo: string;
   createdBy: string;
   timelineItemId: string;
 };
 
+export type ProjectRepo = {
+  label: string;
+  url: string;
+};
+
 export type NewTaskInput = Omit<
   Task,
-  "id" | "taskId" | "createdBy" | "branch" | "endUser" | "module" | "timelineItemId"
+  "id" | "taskId" | "createdBy" | "repo" | "endUser" | "module" | "timelineItemId"
 > &
-  Partial<Pick<Task, "branch" | "endUser" | "module" | "timelineItemId">>;
+  Partial<Pick<Task, "repo" | "endUser" | "module" | "timelineItemId">>;
 
 export type Project = {
   id: string;
@@ -79,7 +84,7 @@ export type Project = {
   clientName: string;
   endUsers: string[];
   modules: string[];
-  repoUrl: string;
+  repos: ProjectRepo[];
   archivedAt: string | null;
   finalDefenseDate: string;
   adviserId: string | null;
@@ -121,7 +126,7 @@ type ProjectContextType = {
     clientName: string;
     endUsers: string[];
     modules: string[];
-    repoUrl?: string;
+    repos?: ProjectRepo[];
   }) => void;
   updateProject: (
     id: string,
@@ -129,7 +134,7 @@ type ProjectContextType = {
       clientName?: string;
       endUsers?: string[];
       modules?: string[];
-      repoUrl?: string;
+      repos?: ProjectRepo[];
       finalDefenseDate?: string;
       adviserId?: string | null;
       healthStatus?: HealthStatus;
@@ -196,7 +201,7 @@ function toDbTask(t: Task) {
     start_date: t.startDate,
     completed_at: t.completedAt,
     priority: t.priority,
-    branch_name: t.branch,
+    repo: t.repo,
     created_by: t.createdBy,
     timeline_item_id: t.timelineItemId || null,
   };
@@ -220,7 +225,7 @@ type TaskRow = {
   start_date: string | null;
   completed_at: string | null;
   priority: string | null;
-  branch_name: string | null;
+  repo: string | null;
   created_by: string | null;
   timeline_item_id: string | null;
 };
@@ -244,7 +249,7 @@ function fromDbTask(r: TaskRow): Task {
     startDate: r.start_date || "",
     completedAt: r.completed_at || "",
     priority: (r.priority || "medium") as Task["priority"],
-    branch: r.branch_name || "",
+    repo: r.repo || "",
     createdBy: r.created_by || "",
     timelineItemId: r.timeline_item_id || "",
   };
@@ -319,6 +324,7 @@ type ProjectRow = {
   client_name: string | null;
   end_users: string[] | null;
   modules: string[] | null;
+  repos: { label: string; url: string }[] | null;
   repo_url: string | null;
   archived_at: string | null;
   final_defense_date?: string | null;
@@ -328,6 +334,9 @@ type ProjectRow = {
 };
 
 function fromDbProject(r: ProjectRow): Project {
+  const raw = Array.isArray(r.repos) ? r.repos : [];
+  const repos =
+    raw.length > 0 ? raw : r.repo_url?.trim() ? [{ label: "Repository", url: r.repo_url }] : [];
   return {
     id: r.id,
     name: r.name,
@@ -336,7 +345,7 @@ function fromDbProject(r: ProjectRow): Project {
     clientName: r.client_name || "",
     endUsers: r.end_users || [],
     modules: r.modules || [],
-    repoUrl: r.repo_url || "",
+    repos,
     archivedAt: r.archived_at || null,
     finalDefenseDate: r.final_defense_date || "",
     adviserId: r.adviser_id || null,
@@ -705,6 +714,11 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       fresh.endUsers.some((u, i) => u !== currentProject.endUsers[i]) ||
       fresh.modules.length !== currentProject.modules.length ||
       fresh.modules.some((m, i) => m !== currentProject.modules[i]) ||
+      fresh.repos.length !== currentProject.repos.length ||
+      fresh.repos.some(
+        (r, i) =>
+          r.label !== currentProject.repos[i]?.label || r.url !== currentProject.repos[i]?.url,
+      ) ||
       fresh.name !== currentProject.name ||
       fresh.prefix !== currentProject.prefix
     ) {
@@ -761,7 +775,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     clientName: string;
     endUsers: string[];
     modules: string[];
-    repoUrl?: string;
+    repos?: ProjectRepo[];
   }) {
     const id = data.name
       .toLowerCase()
@@ -782,7 +796,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       clientName: data.clientName,
       endUsers: data.endUsers,
       modules: data.modules,
-      repoUrl: data.repoUrl?.trim() ?? "",
+      repos: data.repos ?? [],
       archivedAt: null,
       finalDefenseDate: "",
       adviserId: null,
@@ -803,7 +817,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
           client_name: data.clientName || "",
           end_users: data.endUsers ?? [],
           modules: data.modules ?? [],
-          repo_url: data.repoUrl?.trim() || null,
+          repos: data.repos ?? [],
         });
       if (res?.error) {
         console.error("[addProject] Supabase error:", res.error);
@@ -826,7 +840,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       clientName?: string;
       endUsers?: string[];
       modules?: string[];
-      repoUrl?: string;
+      repos?: ProjectRepo[];
       finalDefenseDate?: string;
       adviserId?: string | null;
       healthStatus?: HealthStatus;
@@ -840,7 +854,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     if (updates.clientName !== undefined) dbUpdates.client_name = updates.clientName;
     if (updates.endUsers !== undefined) dbUpdates.end_users = updates.endUsers;
     if (updates.modules !== undefined) dbUpdates.modules = updates.modules;
-    if (updates.repoUrl !== undefined) dbUpdates.repo_url = updates.repoUrl.trim() || null;
+    if (updates.repos !== undefined) dbUpdates.repos = updates.repos;
     if (updates.finalDefenseDate !== undefined)
       dbUpdates.final_defense_date = updates.finalDefenseDate;
     if (updates.adviserId !== undefined) dbUpdates.adviser_id = updates.adviserId || null;
@@ -920,18 +934,12 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
 
   async function addTask(t: NewTaskInput) {
     const tid = nextTaskId(t.projectId);
-    const slug = t.title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "")
-      .slice(0, 30);
-    const branch = `feature/${tid.toLowerCase()}-${slug}`;
     const task: Task = {
       id: generateId(),
       taskId: tid,
       createdBy: profile?.name || "",
       ...t,
-      branch: t.branch || branch,
+      repo: t.repo || "",
       endUser: t.endUser || "",
       module: t.module || "",
       timelineItemId: t.timelineItemId || "",
@@ -978,7 +986,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       else if (k === "dueDate") dbUpdates.due_date = v;
       else if (k === "startDate") dbUpdates.start_date = v;
       else if (k === "completedAt") dbUpdates.completed_at = v;
-      else if (k === "branch") dbUpdates.branch_name = v;
+      else if (k === "repo") dbUpdates.repo = v;
       else if (k === "endUser") dbUpdates.end_user = v;
       else if (k === "module") dbUpdates.module = v;
       else if (k === "createdBy") dbUpdates.created_by = v;

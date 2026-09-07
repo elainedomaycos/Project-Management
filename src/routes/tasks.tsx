@@ -287,13 +287,8 @@ function FeatureTasksPage() {
   const [showNewModal, setShowNewModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [remarksDraft, setRemarksDraft] = useState("");
-  const [branchDraft, setBranchDraft] = useState("");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingSave = useRef<{ id: string; field: "remarks" | "branch"; value: string } | null>(
-    null,
-  );
-  const [rowBranchDrafts, setRowBranchDrafts] = useState<Record<string, string>>({});
-  const rowBranchTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const pendingSave = useRef<{ id: string; value: string } | null>(null);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<TaskStatus | "all">("all");
   const [filterDev, setFilterDev] = useState<string>("all");
@@ -310,6 +305,7 @@ function FeatureTasksPage() {
     description: "",
     developer: "",
     field: "",
+    repo: "",
     endUser: "",
     module: "",
     startDate: new Date().toISOString().slice(0, 10),
@@ -336,52 +332,22 @@ function FeatureTasksPage() {
 
   useEffect(() => {
     setRemarksDraft(selectedTask?.remarks ?? "");
-    setBranchDraft(selectedTask?.branch ?? "");
-  }, [selectedTask?.id, selectedTask?.remarks, selectedTask?.branch]);
+  }, [selectedTask?.id, selectedTask?.remarks]);
 
   useEffect(() => {
-    const timers = rowBranchTimers.current;
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
-      timers.forEach((t) => clearTimeout(t));
-      timers.clear();
     };
   }, []);
 
-  function scheduleRowBranch(id: string, value: string) {
-    setRowBranchDrafts((prev) => ({ ...prev, [id]: value }));
-    const timer = rowBranchTimers.current.get(id);
-    if (timer) clearTimeout(timer);
-    rowBranchTimers.current.set(
-      id,
-      setTimeout(() => {
-        rowBranchTimers.current.delete(id);
-        updateTask(id, { branch: value });
-      }, 400),
-    );
-  }
-
-  function commitRowBranch(id: string) {
-    const draft = rowBranchDrafts[id];
-    const timer = rowBranchTimers.current.get(id);
-    if (timer) clearTimeout(timer);
-    rowBranchTimers.current.delete(id);
-    setRowBranchDrafts((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-    if (draft !== undefined) updateTask(id, { branch: draft });
-  }
-
-  function scheduleSave(id: string, field: "remarks" | "branch", value: string) {
-    pendingSave.current = { id, field, value };
+  function scheduleSave(id: string, value: string) {
+    pendingSave.current = { id, value };
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       if (!pendingSave.current) return;
-      const { id, field, value } = pendingSave.current;
+      const { id, value } = pendingSave.current;
       pendingSave.current = null;
-      updateTask(id, field === "remarks" ? { remarks: value } : { branch: value });
+      updateTask(id, { remarks: value });
     }, 400);
   }
 
@@ -389,9 +355,9 @@ function FeatureTasksPage() {
     if (!selectedTask || !pendingSave.current) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = null;
-    const { id, field, value } = pendingSave.current;
+    const { id, value } = pendingSave.current;
     pendingSave.current = null;
-    updateTask(id, field === "remarks" ? { remarks: value } : { branch: value });
+    updateTask(id, { remarks: value });
   }
 
   function creatorOptions(current: string): string[] {
@@ -480,6 +446,7 @@ function FeatureTasksPage() {
       description: form.description.trim(),
       developer: form.developer,
       field: form.field,
+      repo: form.repo,
       endUser: form.endUser,
       module: form.module,
       status: "pending",
@@ -496,6 +463,7 @@ function FeatureTasksPage() {
       description: "",
       developer: "",
       field: "",
+      repo: "",
       endUser: "",
       module: "",
       startDate: new Date().toISOString().slice(0, 10),
@@ -538,20 +506,6 @@ function FeatureTasksPage() {
   function copyTaskId(taskId: string) {
     navigator.clipboard.writeText(taskId).then(() => {
       setCopiedId(taskId);
-      setTimeout(() => setCopiedId(null), 1500);
-    });
-  }
-
-  function copyBranchName(task: Task) {
-    const branch =
-      task.branch ||
-      `feature/${task.taskId.toLowerCase()}-${task.title
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "")
-        .slice(0, 30)}`;
-    navigator.clipboard.writeText(branch).then(() => {
-      setCopiedId(`branch-${task.id}`);
       setTimeout(() => setCopiedId(null), 1500);
     });
   }
@@ -717,7 +671,7 @@ function FeatureTasksPage() {
                 <Th>Created By</Th>
                 <Th>Status</Th>
                 <Th>Due</Th>
-                <Th>Branch</Th>
+                <Th>System/Repo</Th>
               </tr>
             </thead>
             <tbody>
@@ -839,26 +793,24 @@ function FeatureTasksPage() {
                   </Td>
                   <Td>
                     <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                      <GitBranch className="size-3 text-muted-foreground shrink-0" />
-                      <input
-                        value={rowBranchDrafts[t.id] ?? t.branch}
-                        onChange={(e) => scheduleRowBranch(t.id, e.target.value)}
-                        onBlur={() => commitRowBranch(t.id)}
-                        className="w-40 px-1 py-0.5 bg-transparent border border-transparent hover:border-border focus:border-primary rounded text-[10px] font-mono text-muted-foreground focus:outline-none focus:bg-surface-2"
-                        title="Edit branch name"
-                        readOnly={!canEditTask(t)}
-                      />
-                      <button
-                        onClick={() => copyBranchName(t)}
-                        className="p-0.5 rounded hover:bg-surface-2 text-muted-foreground hover:text-primary shrink-0"
-                        title="Copy branch name"
-                      >
-                        {copiedId === `branch-${t.id}` ? (
-                          <CheckCircle2 className="size-3 text-success" />
-                        ) : (
-                          <Copy className="size-3" />
-                        )}
-                      </button>
+                      {!canEditTask(t) ? (
+                        <span className="text-[10px] font-mono text-muted-foreground">
+                          {t.repo || "—"}
+                        </span>
+                      ) : (
+                        <select
+                          value={t.repo}
+                          onChange={(e) => updateTask(t.id, { repo: e.target.value })}
+                          className={`text-[10px] font-mono px-1.5 py-0.5 rounded border border-transparent focus:border-primary cursor-pointer bg-transparent ${t.repo ? "text-foreground" : "text-muted-foreground"}`}
+                        >
+                          <option value="">—</option>
+                          {(projects.find((p) => p.id === t.projectId)?.repos ?? []).map((r) => (
+                            <option key={r.label} value={r.label}>
+                              {r.label}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </div>
                   </Td>
                 </tr>
@@ -906,21 +858,6 @@ function FeatureTasksPage() {
                 <X className="size-4" />
               </button>
             </div>
-            {(() => {
-              const slug = form.title
-                .toLowerCase()
-                .replace(/[^a-z0-9]+/g, "-")
-                .replace(/^-|-$/g, "")
-                .slice(0, 30);
-              return slug ? (
-                <div className="px-5 py-2.5 border-b border-border flex items-center gap-2">
-                  <GitBranch className="size-3 text-muted-foreground shrink-0" />
-                  <span className="text-[10px] font-mono text-muted-foreground">
-                    Auto branch: feature/{nextTaskId(pid ?? "").toLowerCase()}-{slug}
-                  </span>
-                </div>
-              ) : null;
-            })()}
             <div className="p-5 space-y-4">
               <div>
                 <label className="text-[10px] font-mono uppercase text-muted-foreground">
@@ -981,22 +918,41 @@ function FeatureTasksPage() {
                   </select>
                 </div>
               </div>
-              <div>
-                <label className="text-[10px] font-mono uppercase text-muted-foreground">
-                  Field
-                </label>
-                <select
-                  value={form.field}
-                  onChange={(e) => setForm((p) => ({ ...p, field: e.target.value }))}
-                  className="w-full mt-1 px-3 py-2 rounded-md bg-surface-2 border border-border text-sm focus:outline-none focus:border-primary"
-                >
-                  <option value="">—</option>
-                  {FIELD_OPTIONS.map((f) => (
-                    <option key={f} value={f}>
-                      {f}
-                    </option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-mono uppercase text-muted-foreground">
+                    System/Repo
+                  </label>
+                  <select
+                    value={form.repo}
+                    onChange={(e) => setForm((p) => ({ ...p, repo: e.target.value }))}
+                    className="w-full mt-1 px-3 py-2 rounded-md bg-surface-2 border border-border text-sm focus:outline-none focus:border-primary"
+                  >
+                    <option value="">—</option>
+                    {(currentProj?.repos ?? []).map((r) => (
+                      <option key={r.label} value={r.label}>
+                        {r.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-mono uppercase text-muted-foreground">
+                    Field
+                  </label>
+                  <select
+                    value={form.field}
+                    onChange={(e) => setForm((p) => ({ ...p, field: e.target.value }))}
+                    className="w-full mt-1 px-3 py-2 rounded-md bg-surface-2 border border-border text-sm focus:outline-none focus:border-primary"
+                  >
+                    <option value="">—</option>
+                    {FIELD_OPTIONS.map((f) => (
+                      <option key={f} value={f}>
+                        {f}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -1105,30 +1061,11 @@ function FeatureTasksPage() {
                 <span className="font-mono text-lg font-bold text-primary">
                   {selectedTask.taskId}
                 </span>
-                <div className="flex items-center gap-2">
-                  <GitBranch className="size-3.5 text-muted-foreground" />
-                  <input
-                    value={branchDraft}
-                    onChange={(e) => {
-                      setBranchDraft(e.target.value);
-                      scheduleSave(selectedTask.id, "branch", e.target.value);
-                    }}
-                    onBlur={commitDraft}
-                    className="w-56 px-2 py-1 bg-surface-2 border border-border rounded text-[10px] font-mono text-muted-foreground focus:outline-none focus:border-primary"
-                    placeholder="feature/..."
-                    readOnly={!canEditTask(selectedTask)}
-                  />
-                  <button
-                    onClick={() => copyBranchName(selectedTask)}
-                    className="flex items-center gap-1.5 px-2.5 py-1 bg-surface-2 border border-border rounded text-[10px] font-mono text-muted-foreground hover:text-foreground shrink-0"
-                  >
-                    {copiedId === `branch-${selectedTask.id}` ? (
-                      <CheckCircle2 className="size-3 text-success" />
-                    ) : (
-                      <Copy className="size-3" />
-                    )}
-                  </button>
-                </div>
+                {selectedTask.repo && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded bg-surface-2 border border-border text-[10px] font-mono text-muted-foreground">
+                    {selectedTask.repo}
+                  </span>
+                )}
               </div>
 
               <div>
@@ -1365,7 +1302,7 @@ function FeatureTasksPage() {
                   value={remarksDraft}
                   onChange={(e) => {
                     setRemarksDraft(e.target.value);
-                    scheduleSave(selectedTask.id, "remarks", e.target.value);
+                    scheduleSave(selectedTask.id, e.target.value);
                   }}
                   onBlur={commitDraft}
                   placeholder="Add a remark..."
@@ -1399,7 +1336,7 @@ function FeatureTasksPage() {
 
       <AiPromptModal
         title="AI Quick Add"
-        subtitle="Describe the feature task in plain English (type or speak). The AI pre-fills the New Task modal — including the auto-generated branch name — for you to review before saving. Nothing is written until you click Create Task."
+        subtitle="Describe the feature task in plain English (type or speak). The AI pre-fills the New Task modal for you to review before saving. Nothing is written until you click Create Task."
         placeholder="e.g. Add a forgot-password page that emails users an OTP reset link"
         open={aiOpen}
         prompt={aiPrompt}
