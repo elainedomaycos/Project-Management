@@ -194,7 +194,7 @@ function DefensePage() {
         new Map(
           ((profs ?? []) as { id: string; display_name: string }[]).map((p) => [
             p.id,
-            p.display_name || "?",
+            (p.display_name || "?").trim() || "?",
           ]),
         ),
       );

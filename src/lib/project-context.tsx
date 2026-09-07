@@ -385,18 +385,28 @@ function db() {
   return supabase as any;
 }
 
+async function queryProfileByName(name: string) {
+  const trimmed = name.trim();
+  if (!trimmed) return { rows: [] as { id: string; display_name: string | null }[], error: null };
+  const escaped = trimmed.replace(/[\\%_]/g, "\\$&");
+  const { data, error } = await db()
+    .from("profiles")
+    .select("id, display_name")
+    .ilike("display_name", `%${escaped}%`);
+  return { rows: (data ?? []) as { id: string; display_name: string | null }[], error };
+}
+
 async function notifyDeveloper(devName: string, message: string, taskId: string) {
   if (!devName) return;
   try {
-    const { data } = await db()
-      .from("profiles")
-      .select("id")
-      .ilike("display_name", devName)
-      .maybeSingle();
-    if (data?.id) {
+    const { rows, error } = await queryProfileByName(devName);
+    if (error || rows.length === 0) return;
+    const exact = rows.find((p) => (p.display_name ?? "").trim() === devName.trim());
+    const pick = exact ?? rows[0];
+    if (pick?.id) {
       await db()
         .from("notifications")
-        .insert({ user_id: data.id, task_id: taskId || null, message });
+        .insert({ user_id: pick.id, task_id: taskId || null, message });
     }
   } catch {
     /* ignore */
@@ -469,7 +479,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         if (profilesRes.data && membershipsRes.data) {
           const nameById = new Map<string, string>();
           for (const p of profilesRes.data) {
-            if (p.display_name) nameById.set(p.id, p.display_name);
+            if (p.display_name?.trim()) nameById.set(p.id, p.display_name.trim());
           }
           const memList: GroupMembership[] = [];
           for (const m of membershipsRes.data) {
@@ -616,7 +626,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
             ]);
             const nameById = new Map<string, string>();
             for (const p of profilesRes.data ?? []) {
-              if (p.display_name) nameById.set(p.id, p.display_name);
+              if (p.display_name?.trim()) nameById.set(p.id, p.display_name.trim());
             }
             const memList: GroupMembership[] = [];
             for (const m of membershipsRes.data ?? []) {
@@ -1207,24 +1217,41 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     };
   }
 
+  const resolveProfileId = useCallback(async (name: string): Promise<string | null> => {
+    const trimmed = name.trim();
+    if (!trimmed) return null;
+    const { rows, error } = await queryProfileByName(trimmed);
+    if (error) {
+      console.error("[resolveProfileId]", error);
+      notify("error", `Failed to look up "${trimmed}": ${error.message}`);
+      return null;
+    }
+    if (rows.length === 0) {
+      notify("error", `No profile found with name "${trimmed}"`);
+      return null;
+    }
+    const exact = rows.find((p) => (p.display_name ?? "").trim() === trimmed);
+    if (rows.length > 1 && !exact) {
+      notify(
+        "error",
+        `Multiple profiles match "${trimmed}" — ask an admin to disambiguate or use a more specific name`,
+      );
+      return null;
+    }
+    return (exact ?? rows[0]).id;
+  }, []);
+
   const upsertMember = useCallback(
     async (name: string, role: "developer" | "viewer") => {
       if (!currentProject) return;
       const trimmed = name.trim();
       if (!trimmed) return;
+      const userId = await resolveProfileId(trimmed);
+      if (!userId) return;
       try {
-        const { data } = await db()
-          .from("profiles")
-          .select("id")
-          .ilike("display_name", trimmed.trim())
-          .maybeSingle();
-        if (!data?.id) {
-          notify("error", `No user found with name "${trimmed}"`);
-          return;
-        }
         const upsertRes = await db().from("group_memberships").upsert({
           project_id: currentProject.id,
-          user_id: data.id,
+          user_id: userId,
           role,
         });
         if (upsertRes.error) {
@@ -1247,25 +1274,22 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         );
       }
     },
-    [currentProject],
+    [currentProject, resolveProfileId],
   );
 
   const removeMember = useCallback(
     async (name: string) => {
       if (!currentProject) return;
       const trimmed = name.trim();
+      if (!trimmed) return;
+      const userId = await resolveProfileId(trimmed);
+      if (!userId) return;
       try {
-        const { data } = await db()
-          .from("profiles")
-          .select("id")
-          .ilike("display_name", trimmed)
-          .maybeSingle();
-        if (!data?.id) return;
         const deleteRes = await db()
           .from("group_memberships")
           .delete()
           .eq("project_id", currentProject.id)
-          .eq("user_id", data.id);
+          .eq("user_id", userId);
         if (deleteRes.error) {
           console.error("[removeMember]", deleteRes.error);
           notify("error", `Failed to remove ${trimmed}: ${deleteRes.error.message}`);
@@ -1283,7 +1307,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         );
       }
     },
-    [currentProject],
+    [currentProject, resolveProfileId],
   );
 
   const addDeveloper = useCallback(

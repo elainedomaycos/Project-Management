@@ -322,7 +322,7 @@ function FeatureTasksPage() {
       try {
         const { data } = await supabase.from("profiles").select("display_name").eq("role", "admin");
         if (data?.length) {
-          setadmins(data.map((p) => p.display_name || "").filter(Boolean));
+          setadmins(data.map((p) => (p.display_name || "").trim()).filter(Boolean));
         }
       } catch {
         // ignore

@@ -143,7 +143,7 @@ function MembersPage() {
         if (!cancelled && data?.length) {
           setAllUsers(
             data
-              .map((p) => p.display_name || "")
+              .map((p) => (p.display_name || "").trim())
               .filter(Boolean)
               .sort(),
           );
