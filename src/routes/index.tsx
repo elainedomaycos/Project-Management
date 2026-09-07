@@ -5,7 +5,15 @@ import { HEALTH_META, computeAutoHealth, type HealthDeliverable } from "@/lib/he
 import { supabase } from "@/integrations/supabase/client";
 import { useState, useEffect } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
-import { ListChecks, CheckCircle2, AlertTriangle, Flame, Shield, Target } from "lucide-react";
+import {
+  ListChecks,
+  CheckCircle2,
+  AlertTriangle,
+  Flame,
+  Shield,
+  CalendarClock,
+  TrendingUp,
+} from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -24,6 +32,30 @@ const STATUS_COLORS = {
   done: "#22c55e",
 };
 const STATUS_LABELS = { pending: "Pending", doing: "In Progress", qa: "QA Review", done: "Done" };
+
+type DashboardTaskStats = {
+  total: number;
+  pending: number;
+  doing: number;
+  qa: number;
+  done: number;
+  overdue: number;
+  priorities: { critical: number; high: number; medium: number; low: number };
+  developers: { name: string; total: number; done: number; pct: number | null }[];
+};
+
+type DashboardProjectStats = {
+  id: string;
+  name: string;
+  prefix: string;
+  finalDefenseDate: string | null;
+  tasks: DashboardTaskStats;
+  deliverables: { total: number; completed: number; overdue: number };
+  defects: { openCriticalHigh: number };
+  feedbackOpen: number;
+  readiness: number | null;
+  health: "on_track" | "at_risk" | "behind";
+};
 
 const HEALTH_COLORS: Record<string, string> = {
   on_track: "#22c55e",
@@ -105,6 +137,28 @@ function Dashboard() {
     completed: 0,
   });
 
+  // "All Projects" view: high-level stats across every project, served by a
+  // SECURITY DEFINER function so all registered users see every project
+  // (tasks/QA/details remain RLS-scoped to assigned members elsewhere).
+  const [allStats, setAllStats] = useState<DashboardProjectStats[] | null>(null);
+  const isAll = !currentProject;
+
+  useEffect(() => {
+    if (!isAll) {
+      setAllStats(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any).rpc("get_all_projects_dashboard_stats");
+      if (!cancelled && !error && data) setAllStats(data as DashboardProjectStats[]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAll, projects, tasks]);
+
   // Fetch deliverables for all projects to compute health dynamically
   const [allDeliverables, setAllDeliverables] = useState<Map<string, HealthDeliverable[]>>(
     new Map(),
@@ -143,43 +197,175 @@ function Dashboard() {
     });
   }, [currentProject?.id, allDeliverables]);
 
-  const viewTasks = currentProject ? tasks.filter((t) => t.projectId === currentProject.id) : tasks;
-  const totalTasks = viewTasks.length;
-  const totalDone = viewTasks.filter((t) => t.status === "done").length;
-  const overdue = viewTasks.filter(
-    (t) => t.dueDate && t.dueDate < new Date().toISOString().slice(0, 10) && t.status !== "done",
-  ).length;
+  const statsProjects = isAll && allStats ? allStats : null;
 
-  // Block Readiness: (done tasks + completed deliverables) / (all tasks + all deliverables)
-  const totalUnits = totalTasks + deliverableStats.total;
-  const doneUnits = totalDone + deliverableStats.completed;
+  const totalProjects = statsProjects ? statsProjects.length : projects.length;
+  let totalTasks = 0;
+  let doneCount = 0;
+  let doingCount = 0;
+  let pendingCount = 0;
+  let qaCount = 0;
+  let overdue = 0;
+  let totalDels = 0;
+  let totalCompletedDels = 0;
+  let devData: { name: string; done: number; pending: number; pct: number }[] = [];
+  const priorityCounts: Record<"critical" | "high" | "medium" | "low", number> = {
+    critical: 0,
+    high: 0,
+    medium: 0,
+    low: 0,
+  };
+
+  if (statsProjects) {
+    for (const sp of statsProjects) {
+      const t = sp.tasks;
+      totalTasks += t.total;
+      pendingCount += t.pending;
+      doingCount += t.doing;
+      qaCount += t.qa;
+      doneCount += t.done;
+      overdue += t.overdue;
+      priorityCounts.critical += t.priorities.critical;
+      priorityCounts.high += t.priorities.high;
+      priorityCounts.medium += t.priorities.medium;
+      priorityCounts.low += t.priorities.low;
+      totalDels += sp.deliverables.total;
+      totalCompletedDels += sp.deliverables.completed;
+    }
+    const devMap = new Map<string, { done: number; total: number }>();
+    for (const sp of statsProjects) {
+      for (const d of sp.tasks.developers) {
+        const e = devMap.get(d.name) ?? { done: 0, total: 0 };
+        e.done += d.done;
+        e.total += d.total;
+        devMap.set(d.name, e);
+      }
+    }
+    devData = Array.from(devMap.entries())
+      .map(([name, d]) => ({
+        name,
+        done: d.done,
+        pending: d.total - d.done,
+        pct: d.total > 0 ? Math.round((d.done / d.total) * 100) : 0,
+      }))
+      .sort((a, b) => b.pct - a.pct);
+  } else {
+    const viewTasks = currentProject
+      ? tasks.filter((t) => t.projectId === currentProject.id)
+      : tasks;
+    totalTasks = viewTasks.length;
+    pendingCount = viewTasks.filter((t) => t.status === "pending").length;
+    doingCount = viewTasks.filter((t) => t.status === "doing").length;
+    qaCount = viewTasks.filter((t) => t.status === "qa").length;
+    doneCount = viewTasks.filter((t) => t.status === "done").length;
+    overdue = viewTasks.filter(
+      (t) => t.dueDate && t.dueDate < new Date().toISOString().slice(0, 10) && t.status !== "done",
+    ).length;
+    for (const k of ["critical", "high", "medium", "low"] as const) {
+      priorityCounts[k] = viewTasks.filter((t) => t.priority === k).length;
+    }
+    totalDels = deliverableStats.total;
+    totalCompletedDels = deliverableStats.completed;
+    const devMap2 = new Map<string, { done: number; total: number }>();
+    viewTasks.forEach((t) => {
+      if (!t.developer) return;
+      const e = devMap2.get(t.developer) ?? { done: 0, total: 0 };
+      e.total++;
+      if (t.status === "done") e.done++;
+      devMap2.set(t.developer, e);
+    });
+    devData = Array.from(devMap2.entries())
+      .map(([name, d]) => ({
+        name,
+        done: d.done,
+        pending: d.total - d.done,
+        pct: d.total > 0 ? Math.round((d.done / d.total) * 100) : 0,
+      }))
+      .sort((a, b) => b.pct - a.pct);
+  }
+
+  // Block-level summaries for the "All Projects" view
+  const block = {
+    avgProgress: 0,
+    atRiskCount: 0,
+    daysToDefense: null as number | null,
+    openHighBugs: 0,
+    overdueDels: 0,
+    pendingReviews: 0,
+    progressList: [] as { name: string; readiness: number | null }[],
+  };
+  if (statsProjects) {
+    const today = new Date().toISOString().slice(0, 10);
+    const upcoming = statsProjects
+      .map((s) => s.finalDefenseDate || "")
+      .filter((d) => d && d >= today)
+      .sort()[0];
+    block.avgProgress = statsProjects.length
+      ? Math.round(
+          statsProjects.reduce((sum, s) => sum + (s.readiness ?? 0), 0) / statsProjects.length,
+        )
+      : 0;
+    block.atRiskCount = statsProjects.filter((s) => s.health !== "on_track").length;
+    block.daysToDefense = upcoming
+      ? Math.round(
+          (new Date(`${upcoming}T00:00:00`).getTime() - new Date(`${today}T00:00:00`).getTime()) /
+            86_400_000,
+        )
+      : null;
+    block.openHighBugs = statsProjects.reduce((sum, s) => sum + s.defects.openCriticalHigh, 0);
+    block.overdueDels = statsProjects.reduce((sum, s) => sum + s.deliverables.overdue, 0);
+    block.pendingReviews = statsProjects.reduce((sum, s) => sum + s.feedbackOpen, 0);
+    block.progressList = statsProjects
+      .map((s) => ({ name: s.name, readiness: s.readiness }))
+      .sort((a, b) => (b.readiness ?? 0) - (a.readiness ?? 0));
+  }
+
+  const bottleneckItems = [
+    { label: "Open Critical/High Bugs", value: block.openHighBugs, color: "#ef4444" },
+    { label: "Overdue Deliverables", value: block.overdueDels, color: "#f97316" },
+    { label: "Pending Adviser Reviews", value: block.pendingReviews, color: "#eab308" },
+  ];
+  const maxBottleneck = Math.max(...bottleneckItems.map((b) => b.value), 1);
+  const totalUnits = totalTasks + totalDels;
+  const doneUnits = doneCount + totalCompletedDels;
   const blockReadiness = totalUnits > 0 ? Math.round((doneUnits / totalUnits) * 100) : 0;
 
   // Project Health distribution
-  // Compute health for each project from tasks + deliverables
   const healthCounts: Record<string, number> = { on_track: 0, at_risk: 0, behind: 0 };
-  for (const p of projects) {
-    const pTasks = tasks.filter((t) => t.projectId === p.id);
-    const pDels = allDeliverables.get(p.id) ?? [];
-    const computed = computeAutoHealth(pDels, p.finalDefenseDate, { tasks: pTasks });
-    healthCounts[computed] = (healthCounts[computed] || 0) + 1;
+  if (statsProjects) {
+    for (const sp of statsProjects) {
+      healthCounts[sp.health] = (healthCounts[sp.health] || 0) + 1;
+    }
+  } else {
+    for (const p of projects) {
+      const pTasks = tasks.filter((t) => t.projectId === p.id);
+      const pDels = allDeliverables.get(p.id) ?? [];
+      const computed = computeAutoHealth(pDels, p.finalDefenseDate, { tasks: pTasks });
+      healthCounts[computed] = (healthCounts[computed] || 0) + 1;
+    }
   }
   const healthData = [
     { name: "On Track", value: healthCounts["on_track"] || 0, color: HEALTH_COLORS.on_track },
     { name: "At Risk", value: healthCounts["at_risk"] || 0, color: HEALTH_COLORS.at_risk },
     { name: "Behind", value: healthCounts["behind"] || 0, color: HEALTH_COLORS.behind },
   ];
-  const totalProjects = projects.length;
 
   const statusData = ["pending", "doing", "qa", "done"].map((s) => ({
     name: STATUS_LABELS[s as keyof typeof STATUS_LABELS],
-    value: viewTasks.filter((t) => t.status === s).length,
+    value:
+      s === "pending"
+        ? pendingCount
+        : s === "doing"
+          ? doingCount
+          : s === "qa"
+            ? qaCount
+            : doneCount,
     color: STATUS_COLORS[s as keyof typeof STATUS_COLORS],
   }));
 
-  const priorityData = ["critical", "high", "medium", "low"].map((p) => ({
+  const priorityData = (["critical", "high", "medium", "low"] as const).map((p) => ({
     name: p.charAt(0).toUpperCase() + p.slice(1),
-    value: viewTasks.filter((t) => t.priority === p).length,
+    value: priorityCounts[p],
     color:
       p === "critical"
         ? "#ef4444"
@@ -189,23 +375,6 @@ function Dashboard() {
             ? "#eab308"
             : "#6b7280",
   }));
-
-  const devMap = new Map<string, { done: number; total: number }>();
-  viewTasks.forEach((t) => {
-    if (!t.developer) return;
-    const e = devMap.get(t.developer) ?? { done: 0, total: 0 };
-    e.total++;
-    if (t.status === "done") e.done++;
-    devMap.set(t.developer, e);
-  });
-  const devData = Array.from(devMap.entries())
-    .map(([name, d]) => ({
-      name,
-      done: d.done,
-      pending: d.total - d.done,
-      pct: d.total > 0 ? Math.round((d.done / d.total) * 100) : 0,
-    }))
-    .sort((a, b) => b.pct - a.pct);
 
   return (
     <>
@@ -220,67 +389,147 @@ function Dashboard() {
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {/* KPI Row */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-card border border-border rounded-2xl p-5 relative overflow-hidden group hover:border-primary/30 transition-colors">
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-            <div className="flex items-center gap-3 relative">
-              <div className="size-10 rounded-xl bg-primary/10 border border-primary/20 grid place-items-center text-primary">
-                <ListChecks className="size-5" />
+          {statsProjects ? (
+            <>
+              {/* Total Projects */}
+              <div className="bg-card border border-border rounded-2xl p-5 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                <div className="flex items-center gap-3 relative">
+                  <div className="size-10 rounded-xl bg-primary/10 border border-primary/20 grid place-items-center text-primary">
+                    <ListChecks className="size-5" />
+                  </div>
+                  <div>
+                    <div className="text-2xl font-extrabold tracking-tight">{totalProjects}</div>
+                    <div className="text-[10px] font-mono text-muted-foreground uppercase">
+                      Total Projects
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div>
-                <div className="text-2xl font-extrabold tracking-tight">{totalTasks}</div>
-                <div className="text-[10px] font-mono text-muted-foreground uppercase">Tasks</div>
-              </div>
-            </div>
-          </div>
 
-          <div className="bg-card border border-border rounded-2xl p-5 relative overflow-hidden group hover:border-success/30 transition-colors">
-            <div className="absolute inset-0 bg-gradient-to-br from-success/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-            <div className="flex items-center gap-3 relative">
-              <div className="size-10 rounded-xl bg-success/10 border border-success/20 grid place-items-center text-success">
-                <CheckCircle2 className="size-5" />
-              </div>
-              <div>
-                <div className="text-2xl font-extrabold tracking-tight text-success">
-                  {totalDone}
+              {/* Block Average Progress */}
+              <div className="bg-card border border-border rounded-2xl p-5 relative overflow-hidden group hover:border-success/30 transition-colors">
+                <div className="absolute inset-0 bg-gradient-to-br from-success/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                <div className="flex items-center gap-3 relative">
+                  <div className="size-10 rounded-xl bg-success/10 border border-success/20 grid place-items-center text-success">
+                    <TrendingUp className="size-5" />
+                  </div>
+                  <div>
+                    <div className="text-2xl font-extrabold tracking-tight text-success">
+                      {block.avgProgress}%
+                    </div>
+                    <div className="text-[10px] font-mono text-muted-foreground uppercase">
+                      Avg Progress
+                    </div>
+                  </div>
                 </div>
-                <div className="text-[10px] font-mono text-muted-foreground uppercase">
-                  Completed
-                </div>
               </div>
-            </div>
-          </div>
 
-          <div className="bg-card border border-border rounded-2xl p-5 relative overflow-hidden group hover:border-warning/30 transition-colors">
-            <div className="absolute inset-0 bg-gradient-to-br from-warning/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-            <div className="flex items-center gap-3 relative">
-              <div className="size-10 rounded-xl bg-warning/10 border border-warning/20 grid place-items-center text-warning">
-                <Flame className="size-5" />
-              </div>
-              <div>
-                <div className="text-2xl font-extrabold tracking-tight text-warning">
-                  {viewTasks.filter((t) => t.status === "doing").length}
+              {/* At Risk / Behind */}
+              <div className="bg-card border border-border rounded-2xl p-5 relative overflow-hidden group hover:border-warning/30 transition-colors">
+                <div className="absolute inset-0 bg-gradient-to-br from-warning/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                <div className="flex items-center gap-3 relative">
+                  <div className="size-10 rounded-xl bg-warning/10 border border-warning/20 grid place-items-center text-warning">
+                    <AlertTriangle className="size-5" />
+                  </div>
+                  <div>
+                    <div className="text-2xl font-extrabold tracking-tight text-warning">
+                      {block.atRiskCount}
+                    </div>
+                    <div className="text-[10px] font-mono text-muted-foreground uppercase">
+                      At Risk / Behind
+                    </div>
+                  </div>
                 </div>
-                <div className="text-[10px] font-mono text-muted-foreground uppercase">
-                  In Progress
-                </div>
               </div>
-            </div>
-          </div>
 
-          <div className="bg-card border border-border rounded-2xl p-5 relative overflow-hidden group hover:border-destructive/30 transition-colors">
-            <div className="absolute inset-0 bg-gradient-to-br from-destructive/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-            <div className="flex items-center gap-3 relative">
-              <div className="size-10 rounded-xl bg-destructive/10 border border-destructive/20 grid place-items-center text-destructive">
-                <AlertTriangle className="size-5" />
-              </div>
-              <div>
-                <div className="text-2xl font-extrabold tracking-tight text-destructive">
-                  {overdue > 0 ? overdue : 0}
+              {/* Days to Final Defense */}
+              <div className="bg-card border border-border rounded-2xl p-5 relative overflow-hidden group hover:border-destructive/30 transition-colors">
+                <div className="absolute inset-0 bg-gradient-to-br from-destructive/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                <div className="flex items-center gap-3 relative">
+                  <div className="size-10 rounded-xl bg-destructive/10 border border-destructive/20 grid place-items-center text-destructive">
+                    <CalendarClock className="size-5" />
+                  </div>
+                  <div>
+                    <div className="text-2xl font-extrabold tracking-tight text-destructive">
+                      {block.daysToDefense ?? "—"}
+                    </div>
+                    <div className="text-[10px] font-mono text-muted-foreground uppercase">
+                      Days to Final Defense
+                    </div>
+                  </div>
                 </div>
-                <div className="text-[10px] font-mono text-muted-foreground uppercase">Overdue</div>
               </div>
-            </div>
-          </div>
+            </>
+          ) : (
+            <>
+              <div className="bg-card border border-border rounded-2xl p-5 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                <div className="flex items-center gap-3 relative">
+                  <div className="size-10 rounded-xl bg-primary/10 border border-primary/20 grid place-items-center text-primary">
+                    <ListChecks className="size-5" />
+                  </div>
+                  <div>
+                    <div className="text-2xl font-extrabold tracking-tight">{totalTasks}</div>
+                    <div className="text-[10px] font-mono text-muted-foreground uppercase">
+                      Tasks
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-card border border-border rounded-2xl p-5 relative overflow-hidden group hover:border-success/30 transition-colors">
+                <div className="absolute inset-0 bg-gradient-to-br from-success/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                <div className="flex items-center gap-3 relative">
+                  <div className="size-10 rounded-xl bg-success/10 border border-success/20 grid place-items-center text-success">
+                    <CheckCircle2 className="size-5" />
+                  </div>
+                  <div>
+                    <div className="text-2xl font-extrabold tracking-tight text-success">
+                      {doneCount}
+                    </div>
+                    <div className="text-[10px] font-mono text-muted-foreground uppercase">
+                      Completed
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-card border border-border rounded-2xl p-5 relative overflow-hidden group hover:border-warning/30 transition-colors">
+                <div className="absolute inset-0 bg-gradient-to-br from-warning/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                <div className="flex items-center gap-3 relative">
+                  <div className="size-10 rounded-xl bg-warning/10 border border-warning/20 grid place-items-center text-warning">
+                    <Flame className="size-5" />
+                  </div>
+                  <div>
+                    <div className="text-2xl font-extrabold tracking-tight text-warning">
+                      {doingCount}
+                    </div>
+                    <div className="text-[10px] font-mono text-muted-foreground uppercase">
+                      In Progress
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-card border border-border rounded-2xl p-5 relative overflow-hidden group hover:border-destructive/30 transition-colors">
+                <div className="absolute inset-0 bg-gradient-to-br from-destructive/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                <div className="flex items-center gap-3 relative">
+                  <div className="size-10 rounded-xl bg-destructive/10 border border-destructive/20 grid place-items-center text-destructive">
+                    <AlertTriangle className="size-5" />
+                  </div>
+                  <div>
+                    <div className="text-2xl font-extrabold tracking-tight text-destructive">
+                      {overdue > 0 ? overdue : 0}
+                    </div>
+                    <div className="text-[10px] font-mono text-muted-foreground uppercase">
+                      Overdue
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Gauge + Health Row */}
@@ -294,11 +543,11 @@ function Dashboard() {
             </p>
             <div className="flex items-center gap-4 mt-3 text-[10px] font-mono text-muted-foreground">
               <span>
-                Tasks: {totalDone}/{totalTasks}
+                Tasks: {doneCount}/{totalTasks}
               </span>
               <span className="text-border">|</span>
               <span>
-                Deliverables: {deliverableStats.completed}/{deliverableStats.total}
+                Deliverables: {totalCompletedDels}/{totalDels}
               </span>
             </div>
           </div>
@@ -371,88 +620,157 @@ function Dashboard() {
 
         {/* Row 2: Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Status Donut */}
-          <div className="bg-card border border-border rounded-2xl p-6">
-            <h2 className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest mb-5">
-              Task Status
-            </h2>
-            {totalTasks === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-12">No data yet.</p>
-            ) : (
-              <div className="flex items-center gap-6">
-                <ResponsiveContainer width={160} height={160}>
-                  <PieChart>
-                    <Pie
-                      data={statusData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={45}
-                      outerRadius={70}
-                      paddingAngle={4}
-                      dataKey="value"
-                    >
-                      {statusData.map((entry, i) => (
-                        <Cell key={i} fill={entry.color} stroke="transparent" />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        background: "var(--color-card)",
-                        border: "1px solid var(--color-border)",
-                        borderRadius: "10px",
-                        fontSize: "12px",
-                        fontFamily: "var(--font-mono)",
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="space-y-3">
-                  {statusData.map((s) => (
-                    <div key={s.name} className="flex items-center gap-2.5 text-xs">
-                      <div className="size-2.5 rounded-full" style={{ background: s.color }} />
-                      <span className="text-muted-foreground w-16">{s.name}</span>
-                      <span className="font-mono font-bold">{s.value}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Priority Breakdown */}
-          <div className="bg-card border border-border rounded-2xl p-6">
-            <h2 className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest mb-5">
-              Priority Breakdown
-            </h2>
-            {totalTasks === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-12">No data yet.</p>
-            ) : (
-              <div className="space-y-4">
-                {priorityData.map((p) => {
-                  const pct = totalTasks > 0 ? Math.round((p.value / totalTasks) * 100) : 0;
-                  return (
-                    <div key={p.name}>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <div className="flex items-center gap-2">
-                          <div className="size-2 rounded-sm" style={{ background: p.color }} />
-                          <span className="text-xs font-medium">{p.name}</span>
+          {statsProjects ? (
+            <>
+              {/* Project Progress Comparison */}
+              <div className="bg-card border border-border rounded-2xl p-6">
+                <h2 className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest mb-5">
+                  Project Progress
+                </h2>
+                {block.progressList.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-12">No data yet.</p>
+                ) : (
+                  <div className="space-y-3 max-h-80 overflow-y-auto no-scrollbar">
+                    {block.progressList.map((p) => (
+                      <div key={p.name}>
+                        <div className="flex items-center justify-between mb-1.5 gap-2">
+                          <span className="text-xs font-medium truncate">{p.name}</span>
+                          <span className="text-[10px] font-mono font-bold text-muted-foreground shrink-0">
+                            {p.readiness ?? 0}%
+                          </span>
                         </div>
-                        <span className="text-[10px] font-mono text-muted-foreground">
-                          {p.value} <span className="text-muted-foreground/50">({pct}%)</span>
-                        </span>
+                        <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-700 bg-primary"
+                            style={{ width: `${p.readiness ?? 0}%` }}
+                          />
+                        </div>
                       </div>
-                      <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-700"
-                          style={{ width: `${pct}%`, background: p.color }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+
+              {/* Block Bottlenecks */}
+              <div className="bg-card border border-border rounded-2xl p-6">
+                <h2 className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest mb-5">
+                  Block Bottlenecks
+                </h2>
+                {bottleneckItems.reduce((sum, b) => sum + b.value, 0) === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-12">
+                    No active bottlenecks.
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {bottleneckItems.map((b) => (
+                      <div key={b.label}>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-xs font-medium">{b.label}</span>
+                          <span className="text-[10px] font-mono font-bold text-muted-foreground">
+                            {b.value}
+                          </span>
+                        </div>
+                        <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-700"
+                            style={{
+                              width: `${Math.round((b.value / maxBottleneck) * 100)}%`,
+                              background: b.color,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Status Donut */}
+              <div className="bg-card border border-border rounded-2xl p-6">
+                <h2 className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest mb-5">
+                  Task Status
+                </h2>
+                {totalTasks === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-12">No data yet.</p>
+                ) : (
+                  <div className="flex items-center gap-6">
+                    <ResponsiveContainer width={160} height={160}>
+                      <PieChart>
+                        <Pie
+                          data={statusData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={45}
+                          outerRadius={70}
+                          paddingAngle={4}
+                          dataKey="value"
+                        >
+                          {statusData.map((entry, i) => (
+                            <Cell key={i} fill={entry.color} stroke="transparent" />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          contentStyle={{
+                            background: "var(--color-card)",
+                            border: "1px solid var(--color-border)",
+                            borderRadius: "10px",
+                            fontSize: "12px",
+                            fontFamily: "var(--font-mono)",
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="space-y-3">
+                      {statusData.map((s) => (
+                        <div key={s.name} className="flex items-center gap-2.5 text-xs">
+                          <div className="size-2.5 rounded-full" style={{ background: s.color }} />
+                          <span className="text-muted-foreground w-16">{s.name}</span>
+                          <span className="font-mono font-bold">{s.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Priority Breakdown */}
+              <div className="bg-card border border-border rounded-2xl p-6">
+                <h2 className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest mb-5">
+                  Priority Breakdown
+                </h2>
+                {totalTasks === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-12">No data yet.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {priorityData.map((p) => {
+                      const pct = totalTasks > 0 ? Math.round((p.value / totalTasks) * 100) : 0;
+                      return (
+                        <div key={p.name}>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <div className="flex items-center gap-2">
+                              <div className="size-2 rounded-sm" style={{ background: p.color }} />
+                              <span className="text-xs font-medium">{p.name}</span>
+                            </div>
+                            <span className="text-[10px] font-mono text-muted-foreground">
+                              {p.value} <span className="text-muted-foreground/50">({pct}%)</span>
+                            </span>
+                          </div>
+                          <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-700"
+                              style={{ width: `${pct}%`, background: p.color }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
 
           {/* Developer Leaderboard */}
           <div className="bg-card border border-border rounded-2xl p-6">
