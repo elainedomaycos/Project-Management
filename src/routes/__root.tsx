@@ -525,9 +525,9 @@ function TagDropdown({
       </button>
 
       {open && (
-        <div className="absolute z-50 left-0 right-0 mt-1 bg-popover border border-border rounded-md shadow-lg overflow-hidden">
+        <div className="absolute z-50 left-0 right-0 mt-1 bg-popover border border-border rounded-md shadow-lg overflow-hidden flex flex-col max-h-56">
           {items.length > 0 ? (
-            <div className="max-h-40 overflow-y-auto">
+            <div className="overflow-y-auto">
               {items.map((item) => (
                 <div
                   key={item}
@@ -547,7 +547,7 @@ function TagDropdown({
           ) : (
             <p className="text-xs text-muted-foreground text-center py-3">No items yet</p>
           )}
-          <div className="flex gap-1 p-2 border-t border-border">
+          <div className="shrink-0 flex gap-1 p-2 border-t border-border">
             <input
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
@@ -808,10 +808,10 @@ function ProjectSelector() {
           onClick={() => setShowModal(false)}
         >
           <div
-            className="w-full max-w-sm bg-card border border-border rounded-lg shadow-xl"
+            className="w-full max-w-sm max-h-[85vh] flex flex-col bg-card border border-border rounded-lg shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+            <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-border">
               <span className="text-sm font-semibold">New Project</span>
               <button
                 onClick={() => setShowModal(false)}
@@ -820,7 +820,7 @@ function ProjectSelector() {
                 <X className="size-4" />
               </button>
             </div>
-            <div className="p-4 space-y-3">
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
               <div>
                 <label className="text-[10px] font-mono uppercase text-muted-foreground">
                   Project Name *
@@ -877,7 +877,7 @@ function ProjectSelector() {
                 />
               </div>
             </div>
-            <div className="flex justify-end gap-2 px-4 py-3 border-t border-border">
+            <div className="shrink-0 flex justify-end gap-2 px-4 py-3 border-t border-border">
               <button
                 onClick={() => setShowModal(false)}
                 className="px-3 py-1.5 text-xs font-medium rounded border border-border hover:bg-surface-2"
@@ -902,10 +902,10 @@ function ProjectSelector() {
           onClick={() => setShowManage(false)}
         >
           <div
-            className="w-full max-w-sm bg-card border border-border rounded-lg shadow-xl"
+            className="w-full max-w-sm max-h-[85vh] flex flex-col bg-card border border-border rounded-lg shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+            <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-border">
               <span className="text-sm font-semibold">Manage Project</span>
               <button
                 onClick={() => setShowManage(false)}
@@ -914,7 +914,7 @@ function ProjectSelector() {
                 <X className="size-4" />
               </button>
             </div>
-            <div className="p-4 space-y-3">
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
               <p className="text-xs text-muted-foreground bg-surface-2 border border-border rounded-md px-3 py-2">
                 {currentProject.name}
               </p>
@@ -965,7 +965,7 @@ function ProjectSelector() {
                 </p>
               </div>
             </div>
-            <div className="flex justify-end gap-2 px-4 py-3 border-t border-border">
+            <div className="shrink-0 flex justify-end gap-2 px-4 py-3 border-t border-border">
               <button
                 onClick={() => setShowManage(false)}
                 className="px-3 py-1.5 text-xs font-medium rounded border border-border hover:bg-surface-2"
