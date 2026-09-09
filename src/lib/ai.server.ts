@@ -46,6 +46,29 @@ export type DefectSmartContext = {
   }[];
 };
 
+export type GeneratedTestCase = {
+  title: string;
+  preconditions: string;
+  steps: string;
+  expectedResult: string;
+};
+
+export type TestCaseSmartContext = {
+  prompt: string;
+  projectName: string;
+  modules: string[];
+  task: {
+    taskId: string;
+    title: string;
+    description: string;
+    module: string;
+    field: string;
+    endUser: string;
+    developer: string;
+    status: TaskStatus;
+  } | null;
+};
+
 const generatedTaskSchema = z.object({
   title: z.string().min(1),
   description: z.string().default(""),
@@ -66,6 +89,19 @@ const generatedDefectSchema = z.object({
   priority: z.enum(["Low", "Medium", "High"]).default("Medium"),
   relatedTaskIds: z.array(z.string()).default([]),
 });
+
+const generatedTestCaseSchema = z.object({
+  title: z.string().min(1),
+  preconditions: z.string().default(""),
+  steps: z.string().default(""),
+  expectedResult: z.string().default(""),
+});
+
+const generatedTestCasesSchema = z
+  .object({
+    testCases: z.array(generatedTestCaseSchema).max(5).default([]),
+  })
+  .default({ testCases: [] });
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const MODEL = "openai/gpt-oss-120b";
@@ -175,6 +211,36 @@ function defectUserPrompt(p: DefectSmartContext): string {
     lines.push("- (none yet)");
   }
   lines.push(`Bug report from user: ${p.prompt}`);
+  return lines.join("\n");
+}
+
+function testCaseSystemPrompt(): string {
+  return (
+    "You are a senior QA engineer embedded in a capstone project management tool. " +
+    "Given a feature task, design a focused set of test cases that verify it works. " +
+    "Return up to 5 atomic test cases as a JSON object. Cover the happy path plus realistic " +
+    "negative, boundary, and edge scenarios relevant to the task. " +
+    "Each test case must include a concise 'title' (imperative, e.g. 'Verify login redirects to dashboard on valid credentials'), " +
+    "'preconditions' (setup required before executing), 'steps' (numbered list of concrete actions), and 'expectedResult'. " +
+    "Return ONLY a JSON object: { testCases: [{ title, preconditions, steps, expectedResult }] }."
+  );
+}
+
+function testCaseUserPrompt(p: TestCaseSmartContext): string {
+  const lines = [`Project: ${p.projectName || "Unnamed project"}`];
+  if (p.modules.length) lines.push(`Configured modules: ${p.modules.join(", ")}`);
+  lines.push("Target feature task:");
+  if (p.task) {
+    lines.push(`- taskId: ${p.task.taskId}`);
+    lines.push(`- title: ${p.task.title}`);
+    lines.push(`- description: ${p.task.description || "(none)"}`);
+    lines.push(
+      `- module: ${p.task.module || "-"} | field: ${p.task.field || "-"} | endUser: ${p.task.endUser || "-"} | developer: ${p.task.developer || "-"} | status: ${p.task.status}`,
+    );
+  } else {
+    lines.push("- (task not provided)");
+  }
+  lines.push(`User request: ${p.prompt}`);
   return lines.join("\n");
 }
 
@@ -300,6 +366,41 @@ function mockDefect(p: DefectSmartContext): GeneratedDefect {
   };
 }
 
+function mockTestCases(p: TestCaseSmartContext): GeneratedTestCase[] {
+  const base = p.task?.title || p.prompt.replace(/create test cases?/i, "").trim() || "Feature";
+  const module = pickModule(p.prompt.toLowerCase(), p.modules) || p.task?.module || "";
+  const prefix = module ? `${module}: ` : "";
+  const cases: GeneratedTestCase[] = [
+    {
+      title: `${prefix}${p.task?.taskId ? `Verify ${p.task?.taskId} ` : ""}happy path works as expected`,
+      preconditions: "User is logged in and has access to the feature.",
+      steps: `1. Navigate to the ${module || "reported"} screen.\n2. Perform the main flow described.\n3. Confirm each action succeeds.`,
+      expectedResult: `${p.task?.title || base} behaves as described without errors.`,
+    },
+    {
+      title: `${prefix}Reject invalid or blank input`,
+      preconditions: "User is on the relevant input form/screen.",
+      steps:
+        "1. Submit the flow with blank or invalid values.\n2. Observe the validation response.",
+      expectedResult:
+        "User sees a clear validation message and the flow is blocked until corrected.",
+    },
+    {
+      title: `${prefix}Handle empty data state gracefully`,
+      preconditions: "No related data exists yet for the user/project.",
+      steps: "1. Open the feature with an empty dataset.\n2. Observe the empty state.",
+      expectedResult: "A friendly empty state is shown; no console errors or blank screens.",
+    },
+    {
+      title: `${prefix}Prevent duplicate submissions`,
+      preconditions: "User can trigger the action twice in a row.",
+      steps: "1. Perform the action once successfully.\n2. Immediately trigger it again.",
+      expectedResult: "Duplicates are prevented and the UI reflects the already-completed state.",
+    },
+  ];
+  return cases;
+}
+
 export async function generateTaskFromPrompt(payload: TaskSmartContext): Promise<GeneratedTask> {
   try {
     const raw = await callGroqJson(taskSystemPrompt(), taskUserPrompt(payload));
@@ -367,5 +468,32 @@ export async function generateDefectFromPrompt(
     };
   } catch {
     return mockDefect(payload);
+  }
+}
+
+export async function generateTestCasesFromPrompt(
+  payload: TestCaseSmartContext,
+): Promise<{ testCases: GeneratedTestCase[] }> {
+  try {
+    const raw = await callGroqJson(testCaseSystemPrompt(), testCaseUserPrompt(payload));
+    const rec = asRecord(raw);
+    const parsed = generatedTestCasesSchema.safeParse({
+      testCases: Array.isArray(rec.testCases)
+        ? (rec.testCases as unknown[]).map((tc) => {
+            const t = asRecord(tc);
+            return {
+              title: String(t.title ?? "").trim(),
+              preconditions: String(t.preconditions ?? "").trim(),
+              steps: String(t.steps ?? "").trim(),
+              expectedResult: String(t.expectedResult ?? "").trim(),
+            };
+          })
+        : [],
+    });
+    if (!parsed.success || parsed.data.testCases.length === 0)
+      return { testCases: mockTestCases(payload).slice(0, 5) };
+    return { testCases: parsed.data.testCases.slice(0, 5) };
+  } catch {
+    return { testCases: mockTestCases(payload).slice(0, 5) };
   }
 }

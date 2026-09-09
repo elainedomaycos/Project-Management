@@ -21,6 +21,8 @@ export type DefectSeverity = "Low" | "Medium" | "High" | "Critical";
 export type DefectPriority = "Low" | "Medium" | "High";
 export type DefectStatus = "Open" | "In Progress" | "Fixed" | "Closed";
 
+export type DefectKind = "defect" | "test_case";
+
 export type Defect = {
   id: string;
   projectId: string;
@@ -37,6 +39,7 @@ export type Defect = {
   assignedDeveloperId: string;
   relatedTaskId?: string;
   evidenceUrl: string;
+  kind?: DefectKind;
   createdAt: string;
 };
 
@@ -157,6 +160,8 @@ type ProjectContextType = {
   updateDefect: (id: string, updates: Partial<Defect>) => void;
   deleteDefect: (id: string) => void;
   nextDefectId: (projectId: string) => string;
+  addTestCase: (d: NewDefectInput) => void;
+  nextTestId: (projectId: string) => string;
   getProjectDefects: (projectId: string) => Defect[];
   addDeveloper: (name: string) => void;
   removeDeveloper: (name: string) => void;
@@ -271,6 +276,7 @@ type DefectRow = {
   assigned_developer_id: string | null;
   related_task_id: string | null;
   evidence_url: string | null;
+  kind: string | null;
   created_at: string | null;
 };
 
@@ -291,6 +297,7 @@ function fromDbDefect(r: DefectRow): Defect {
     assignedDeveloperId: r.assigned_developer_id || "",
     relatedTaskId: r.related_task_id || "",
     evidenceUrl: r.evidence_url || "",
+    kind: (r.kind || "defect") as Defect["kind"],
     createdAt: r.created_at || "",
   };
 }
@@ -312,6 +319,7 @@ function toDbDefect(d: Defect) {
     assigned_developer_id: d.assignedDeveloperId,
     related_task_id: d.relatedTaskId ?? "",
     evidence_url: d.evidenceUrl,
+    kind: d.kind ?? "defect",
     created_at: d.createdAt,
   };
 }
@@ -1085,6 +1093,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   function addDefect(d: NewDefectInput) {
     const defect: Defect = {
       ...d,
+      kind: d.kind ?? "defect",
       id: nextDefectId(d.projectId),
       createdAt: new Date().toISOString().slice(0, 10),
     };
@@ -1101,6 +1110,36 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         defect.id,
       );
     }
+  }
+
+  function nextTestId(projectId: string): string {
+    const projectTests = defects.filter(
+      (d) => d.projectId === projectId && (d.kind ?? "defect") === "test_case",
+    );
+    const usedNums = new Set<number>();
+    for (const d of projectTests) {
+      const parts = d.id.split("-");
+      const num = parseInt(parts[parts.length - 1], 10);
+      if (!isNaN(num)) usedNums.add(num);
+    }
+    let next = 1;
+    while (usedNums.has(next)) next++;
+    return `TC-${next.toString().padStart(3, "0")}`;
+  }
+
+  function addTestCase(d: NewDefectInput) {
+    const testCase: Defect = {
+      ...d,
+      kind: "test_case",
+      id: nextTestId(d.projectId),
+      createdAt: new Date().toISOString().slice(0, 10),
+    };
+    setAllDefects((prev) => [...prev, testCase]);
+    db()
+      .from("defects")
+      .insert(toDbDefect(testCase))
+      .then(() => notify("success", "Test case(s) logged"))
+      .catch(() => notify("error", "Failed to log test case(s)"));
   }
 
   function updateDefect(id: string, updates: Partial<Defect>) {
@@ -1391,6 +1430,8 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         updateDefect,
         deleteDefect,
         nextDefectId,
+        addTestCase,
+        nextTestId,
         getProjectDefects,
         addDeveloper,
         removeDeveloper,

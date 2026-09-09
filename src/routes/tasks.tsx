@@ -12,7 +12,12 @@ import {
 } from "@/lib/project-context";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/integrations/supabase/client";
-import { generateTaskFromPrompt, generateDefectFromPrompt } from "@/lib/ai-assistant";
+import {
+  generateTaskFromPrompt,
+  generateDefectFromPrompt,
+  generateTestCasesFromPrompt,
+  type GeneratedTestCase,
+} from "@/lib/ai-assistant";
 import {
   Plus,
   X,
@@ -25,6 +30,8 @@ import {
   ArrowUpDown,
   Bug,
   ClipboardList,
+  ClipboardCheck,
+  FlaskConical,
   ExternalLink,
   Sparkles,
   Mic,
@@ -1416,6 +1423,8 @@ function DefectsPage() {
     updateDefect,
     deleteDefect,
     nextDefectId,
+    addTestCase,
+    nextTestId,
     getProjectTasks,
     tasks: allFeatureTasks,
   } = useProject();
@@ -1432,6 +1441,11 @@ function DefectsPage() {
   const [filterSeverity, setFilterSeverity] = useState<DefectSeverity | "all">("all");
   const [filterModule, setFilterModule] = useState<string>("all");
   const [filterDev, setFilterDev] = useState<string>("all");
+  const [filterKind, setFilterKind] = useState<"all" | "defect" | "test_case">("all");
+  const [testDrafts, setTestDrafts] = useState<GeneratedTestCase[]>([]);
+  const [showTestModal, setShowTestModal] = useState(false);
+  const [testTaskId, setTestTaskId] = useState("");
+  const [testModule, setTestModule] = useState("");
   const [form, setForm] = useState({
     title: "",
     module: "",
@@ -1470,6 +1484,7 @@ function DefectsPage() {
 
   const filtered = projectDefects
     .filter((d) => {
+      if (filterKind !== "all" && (d.kind ?? "defect") !== filterKind) return false;
       if (filterStatus !== "all" && d.status !== filterStatus) return false;
       if (filterSeverity !== "all" && d.severity !== filterSeverity) return false;
       if (filterModule !== "all" && d.module !== filterModule) return false;
@@ -1485,10 +1500,11 @@ function DefectsPage() {
       return num(a.id) - num(b.id);
     });
 
-  const openCount = projectDefects.filter((d) => d.status === "Open").length;
-  const inProgressCount = projectDefects.filter((d) => d.status === "In Progress").length;
-  const fixedCount = projectDefects.filter((d) => d.status === "Fixed").length;
-  const closedCount = projectDefects.filter((d) => d.status === "Closed").length;
+  const defectRecords = projectDefects.filter((d) => (d.kind ?? "defect") !== "test_case");
+  const openCount = defectRecords.filter((d) => d.status === "Open").length;
+  const inProgressCount = defectRecords.filter((d) => d.status === "In Progress").length;
+  const fixedCount = defectRecords.filter((d) => d.status === "Fixed").length;
+  const closedCount = defectRecords.filter((d) => d.status === "Closed").length;
 
   function handleCreate() {
     if (!form.title.trim() || !pid) return;
@@ -1526,7 +1542,56 @@ function DefectsPage() {
   }
 
   async function handleAiGenerate() {
-    if (!aiPrompt.trim() || !pid || !currentProj) return;
+    const prompt = aiPrompt.trim();
+    if (!prompt || !pid || !currentProj) return;
+    const wantsTests = /test cases?/i.test(prompt);
+    if (wantsTests) {
+      const matchedTask = projectTasks.find((t) =>
+        prompt.toUpperCase().includes(t.taskId.toUpperCase()),
+      );
+      if (!matchedTask) {
+        setAiError(
+          projectTasks.length > 0
+            ? `No matching feature task ID in "${currentProj.name}". Use one of: ${projectTasks
+                .slice(0, 12)
+                .map((t) => t.taskId)
+                .join(", ")}`
+            : `No feature tasks exist yet in "${currentProj.name}". Create a feature task first, then ask for test cases based on its task ID.`,
+        );
+        return;
+      }
+      setAiThinking(true);
+      setAiError("");
+      try {
+        const result = await generateTestCasesFromPrompt({
+          data: {
+            prompt,
+            projectName: currentProj.name,
+            modules: currentProj.modules ?? [],
+            task: {
+              taskId: matchedTask.taskId,
+              title: matchedTask.title,
+              description: matchedTask.description,
+              module: matchedTask.module,
+              field: matchedTask.field,
+              endUser: matchedTask.endUser,
+              developer: matchedTask.developer,
+              status: matchedTask.status,
+            },
+          },
+        });
+        setTestDrafts(result.testCases);
+        setTestTaskId(matchedTask.taskId);
+        setTestModule(matchedTask.module);
+        setAiOpen(false);
+        setShowTestModal(true);
+      } catch (err) {
+        setAiError(err instanceof Error ? err.message : "AI request failed");
+      } finally {
+        setAiThinking(false);
+      }
+      return;
+    }
     setAiThinking(true);
     setAiError("");
     try {
@@ -1568,6 +1633,42 @@ function DefectsPage() {
     }
   }
 
+  function updateTestDraft(idx: number, patch: Partial<GeneratedTestCase>) {
+    setTestDrafts((prev) => prev.map((t, i) => (i === idx ? { ...t, ...patch } : t)));
+  }
+
+  function removeTestDraft(idx: number) {
+    setTestDrafts((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function handleSaveTestCases() {
+    if (!pid) return;
+    const valid = testDrafts.filter((t) => t.title.trim());
+    if (valid.length === 0) return;
+    for (const t of valid) {
+      addTestCase({
+        projectId: pid,
+        title: t.title.trim(),
+        module: testModule,
+        environment: "",
+        precondition: t.preconditions.trim(),
+        stepsToReproduce: t.steps.trim(),
+        expectedResult: t.expectedResult.trim(),
+        actualResult: "",
+        severity: "Medium",
+        priority: "Medium",
+        status: "Open",
+        assignedDeveloperId: "",
+        relatedTaskId: testTaskId || undefined,
+        evidenceUrl: "",
+      });
+    }
+    setShowTestModal(false);
+    setTestDrafts([]);
+    setTestTaskId("");
+    setTestModule("");
+  }
+
   return (
     <div className="flex-1 overflow-auto p-6 space-y-4">
       {/* Filter Bar */}
@@ -1592,6 +1693,16 @@ function DefectsPage() {
               {o.label}
             </option>
           ))}
+        </select>
+        <select
+          value={filterKind}
+          onChange={(e) => setFilterKind(e.target.value as typeof filterKind)}
+          className="px-2 py-1.5 rounded-md bg-surface-2 border border-border text-xs focus:outline-none focus:border-primary"
+          title="Filter by record type"
+        >
+          <option value="all">All Records</option>
+          <option value="defect">Defects</option>
+          <option value="test_case">Test Cases</option>
         </select>
         <select
           value={filterSeverity}
@@ -1635,14 +1746,16 @@ function DefectsPage() {
         )}
         <div className="ml-auto flex items-center gap-3">
           <span className="text-[10px] font-mono text-muted-foreground">
-            {filtered.length} of {projectDefects.length} defects
+            {filtered.length} of {projectDefects.length} records
           </span>
           {canManageDefect && pid && (
             <>
               <button
                 onClick={() => setAiOpen(true)}
                 className="px-3 py-1.5 text-primary border border-primary/30 text-xs font-bold rounded hover:bg-primary/10 flex items-center gap-1.5"
-                title="AI Log Defect — describe a bug in plain English"
+                title={
+                  'AI Log Defect — describe a bug, or type "create test cases based on <task-id>" to generate test cases'
+                }
               >
                 <Sparkles className="size-3.5" />
                 AI Log Defect
@@ -1714,7 +1827,12 @@ function DefectsPage() {
                   </Td>
                 )}
                 <Td>
-                  <span className="font-mono text-xs font-bold text-destructive">
+                  <span
+                    className={`font-mono text-xs font-bold flex items-center gap-1 ${
+                      (d.kind ?? "defect") === "test_case" ? "text-primary" : "text-destructive"
+                    }`}
+                  >
+                    {(d.kind ?? "defect") === "test_case" && <FlaskConical className="size-3" />}
                     {d.id}
                     {d.priority === "High" && (
                       <AlertTriangle className="size-2.5 inline ml-1 text-warning" />
@@ -1806,8 +1924,10 @@ function DefectsPage() {
                   filterSeverity !== "all" ||
                   filterModule !== "all" ||
                   filterDev !== "all"
-                    ? "No defects match your filters."
-                    : "No defects logged yet. Log your first defect!"}
+                    ? "No records match your filters."
+                    : filterKind === "test_case"
+                      ? "No test cases yet. Use AI Log Defect and ask for test cases based on a feature task."
+                      : "No defects logged yet. Log your first defect!"}
                 </td>
               </tr>
             )}
@@ -2335,10 +2455,141 @@ function DefectsPage() {
         </div>
       )}
 
+      {/* Log Test Cases Modal (AI-generated) */}
+      {showTestModal && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40">
+          <div className="w-full max-w-2xl bg-card border border-border rounded-lg shadow-xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <span className="text-sm font-semibold flex items-center gap-2">
+                <ClipboardCheck className="size-4 text-primary" />
+                Log Test Cases · {currentProj?.name ?? "All Projects"} ·{" "}
+                <span className="text-primary font-mono">{nextTestId(pid ?? "")}</span>
+              </span>
+              <button
+                onClick={() => {
+                  setShowTestModal(false);
+                  setTestDrafts([]);
+                }}
+                className="p-1 rounded hover:bg-surface-2 text-muted-foreground"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              {testTaskId && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono uppercase text-muted-foreground">
+                    Based on task
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-mono border border-primary/30">
+                    <GitBranch className="size-2.5 shrink-0" />
+                    {testTaskId}
+                    {projectTasks.find((t) => t.taskId === testTaskId)?.title
+                      ? ` · ${projectTasks.find((t) => t.taskId === testTaskId)?.title}`
+                      : ""}
+                  </span>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Review and edit the AI-generated test cases below. Nothing is saved until you click
+                Save.
+              </p>
+              {testDrafts.length === 0 && (
+                <p className="text-xs text-destructive">No test cases were generated.</p>
+              )}
+              <div className="space-y-4">
+                {testDrafts.map((tc, idx) => (
+                  <div key={idx} className="border border-border rounded-md p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-mono uppercase text-muted-foreground">
+                        Test Case #{idx + 1}
+                      </span>
+                      <button
+                        onClick={() => removeTestDraft(idx)}
+                        className="p-1 rounded hover:bg-surface-2 text-muted-foreground"
+                        title="Remove test case"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-mono uppercase text-muted-foreground">
+                        Title *
+                      </label>
+                      <input
+                        value={tc.title}
+                        onChange={(e) => updateTestDraft(idx, { title: e.target.value })}
+                        placeholder="Verify login works with valid credentials"
+                        className="w-full mt-1 px-3 py-2 rounded-md bg-surface-2 border border-border text-sm focus:outline-none focus:border-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-mono uppercase text-muted-foreground">
+                        Preconditions
+                      </label>
+                      <textarea
+                        value={tc.preconditions}
+                        onChange={(e) => updateTestDraft(idx, { preconditions: e.target.value })}
+                        placeholder="User is logged in with access to the feature"
+                        className="w-full mt-1 h-14 px-3 py-2 rounded-md bg-surface-2 border border-border text-sm focus:outline-none focus:border-primary resize-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-mono uppercase text-muted-foreground">
+                        Steps to Execute
+                      </label>
+                      <textarea
+                        value={tc.steps}
+                        onChange={(e) => updateTestDraft(idx, { steps: e.target.value })}
+                        placeholder={
+                          "1. Navigate to the feature\n2. Perform the action\n3. Observe"
+                        }
+                        className="w-full mt-1 h-20 px-3 py-2 rounded-md bg-surface-2 border border-border text-sm focus:outline-none focus:border-primary resize-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-mono uppercase text-muted-foreground">
+                        Expected Result
+                      </label>
+                      <textarea
+                        value={tc.expectedResult}
+                        onChange={(e) => updateTestDraft(idx, { expectedResult: e.target.value })}
+                        placeholder="The action succeeds and the UI reflects the expected state"
+                        className="w-full mt-1 h-14 px-3 py-2 rounded-md bg-surface-2 border border-border text-sm focus:outline-none focus:border-primary resize-none"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
+              <button
+                onClick={() => {
+                  setShowTestModal(false);
+                  setTestDrafts([]);
+                }}
+                className="px-4 py-2 text-xs font-medium rounded border border-border hover:bg-surface-2"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveTestCases}
+                disabled={testDrafts.filter((t) => t.title.trim()).length === 0}
+                className="px-4 py-2 bg-primary text-primary-foreground text-xs font-bold rounded hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5"
+              >
+                <ClipboardCheck className="size-3.5" />
+                Save Test Case
+                {testDrafts.length > 1 ? `s (${testDrafts.length})` : undefined}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <AiPromptModal
         title="AI Log Defect"
-        subtitle="Describe the bug in plain English (type or speak). The AI pre-fills the Log Defect modal — including links to matching feature tasks — for you to review before saving. Nothing is written until you click Log Defect."
-        placeholder="e.g. After resetting the password, login redirects to a blank page instead of the dashboard"
+        subtitle='Describe a bug in plain English, OR type "create test cases based on <task-id>" (e.g. create test cases based on PRJ-001) to generate test cases for a feature task. The AI pre-fills a review modal — nothing is written until you click Save.'
+        placeholder='e.g. After resetting the password, login redirects to a blank page instead of the dashboard — or "create test cases based on PRJ-001"'
         open={aiOpen}
         prompt={aiPrompt}
         onPromptChange={setAiPrompt}

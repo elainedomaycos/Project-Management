@@ -4,7 +4,9 @@ import type {
   DefectSmartContext,
   GeneratedDefect,
   GeneratedTask,
+  GeneratedTestCase,
   TaskSmartContext,
+  TestCaseSmartContext,
 } from "./ai.server";
 
 // Client-facing RPC wrappers for the AI assistant. The actual Groq logic lives
@@ -26,4 +28,19 @@ export const generateDefectFromPrompt = createServerFn({ method: "POST" })
     return generateDefectFromPrompt(data);
   });
 
-export type { GeneratedDefect, GeneratedTask, TaskSmartContext, DefectSmartContext };
+export const generateTestCasesFromPrompt = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: TestCaseSmartContext) => data)
+  .handler(async ({ data }) => {
+    const { generateTestCasesFromPrompt } = await import("./ai.server");
+    return generateTestCasesFromPrompt(data);
+  });
+
+export type {
+  GeneratedDefect,
+  GeneratedTask,
+  GeneratedTestCase,
+  TaskSmartContext,
+  DefectSmartContext,
+  TestCaseSmartContext,
+};
