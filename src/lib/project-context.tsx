@@ -1180,13 +1180,39 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   }
 
   function deleteDefect(id: string) {
+    const removed = allDefects.filter((d) => d.id === id);
     setAllDefects((prev) => prev.filter((d) => d.id !== id));
     db()
       .from("defects")
       .delete()
       .eq("id", id)
-      .then(() => notify("success", "Defect deleted"))
-      .catch(() => notify("error", "Failed to delete defect"));
+      .then((res: { error: { message: string } | null }) => {
+        if (res?.error) {
+          setAllDefects((prev) => [...prev.filter((d) => d.id !== id), ...removed]);
+          notify("error", `Failed to delete defect: ${res.error.message}`);
+          return;
+        }
+        notify("success", "Defect deleted");
+        void reconcileDefects();
+      })
+      .catch((err: unknown) => {
+        setAllDefects((prev) => [...prev.filter((d) => d.id !== id), ...removed]);
+        notify(
+          "error",
+          `Failed to delete defect: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      });
+  }
+
+  // Re-sync the in-memory defect list with the database after mutations so the
+  // table always reflects server truth without a manual refresh.
+  async function reconcileDefects() {
+    try {
+      const { data } = await db().from("defects").select("*");
+      if (data) setAllDefects(data.map(fromDbDefect));
+    } catch {
+      // keep current in-memory state if the re-fetch fails
+    }
   }
 
   function nextTaskId(projectId: string): string {
