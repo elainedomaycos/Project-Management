@@ -1645,23 +1645,29 @@ function DefectsPage() {
     if (!pid) return;
     const valid = testDrafts.filter((t) => t.title.trim());
     if (valid.length === 0) return;
-    for (const t of valid) {
-      addTestCase({
-        projectId: pid,
-        title: t.title.trim(),
-        module: testModule,
-        environment: "",
-        precondition: t.preconditions.trim(),
-        stepsToReproduce: t.steps.trim(),
-        expectedResult: t.expectedResult.trim(),
-        actualResult: "",
-        severity: "Medium",
-        priority: "Medium",
-        status: "Open",
-        assignedDeveloperId: "",
-        relatedTaskId: testTaskId || undefined,
-        evidenceUrl: "",
-      });
+    const ids: string[] = [];
+    for (let i = 0; i < valid.length; i++) ids.push(nextTestId(pid, ids));
+    for (let i = 0; i < valid.length; i++) {
+      const t = valid[i];
+      addTestCase(
+        {
+          projectId: pid,
+          title: t.title.trim(),
+          module: testModule,
+          environment: "",
+          precondition: t.preconditions.trim(),
+          stepsToReproduce: t.steps.trim(),
+          expectedResult: t.expectedResult.trim(),
+          actualResult: "",
+          severity: "Medium",
+          priority: "Medium",
+          status: "Open",
+          assignedDeveloperId: "",
+          relatedTaskId: testTaskId || undefined,
+          evidenceUrl: "",
+        },
+        ids[i],
+      );
     }
     setShowTestModal(false);
     setTestDrafts([]);

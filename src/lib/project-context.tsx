@@ -160,8 +160,8 @@ type ProjectContextType = {
   updateDefect: (id: string, updates: Partial<Defect>) => void;
   deleteDefect: (id: string) => void;
   nextDefectId: (projectId: string) => string;
-  addTestCase: (d: NewDefectInput) => void;
-  nextTestId: (projectId: string) => string;
+  addTestCase: (d: NewDefectInput, explicitId?: string) => void;
+  nextTestId: (projectId: string, exclude?: string[]) => string;
   getProjectDefects: (projectId: string) => Defect[];
   addDeveloper: (name: string) => void;
   removeDeveloper: (name: string) => void;
@@ -1112,13 +1112,13 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  function nextTestId(projectId: string): string {
+  function nextTestId(projectId: string, exclude?: string[]): string {
     const projectTests = defects.filter(
       (d) => d.projectId === projectId && (d.kind ?? "defect") === "test_case",
     );
     const usedNums = new Set<number>();
-    for (const d of projectTests) {
-      const parts = d.id.split("-");
+    for (const d of [...projectTests, ...(exclude ?? [])]) {
+      const parts = String(d.id ?? d).split("-");
       const num = parseInt(parts[parts.length - 1], 10);
       if (!isNaN(num)) usedNums.add(num);
     }
@@ -1127,11 +1127,11 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     return `TC-${next.toString().padStart(3, "0")}`;
   }
 
-  function addTestCase(d: NewDefectInput) {
+  function addTestCase(d: NewDefectInput, explicitId?: string) {
     const testCase: Defect = {
       ...d,
       kind: "test_case",
-      id: nextTestId(d.projectId),
+      id: explicitId ?? nextTestId(d.projectId),
       createdAt: new Date().toISOString().slice(0, 10),
     };
     setAllDefects((prev) => [...prev, testCase]);
