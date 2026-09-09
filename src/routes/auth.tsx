@@ -16,7 +16,8 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
-  const { signIn, signUp, resetPassword, user, recoveryMode } = useAuth();
+  const { signIn, signUp, resetPassword, user, recoveryMode, clearRecoveryMode } =
+    useAuth();
 
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
@@ -163,8 +164,9 @@ function AuthPage() {
               <button
                 onClick={() => {
                   setMode("login");
+                  clearRecoveryMode();
                 }}
-                className="text-xs text-muted-foreground hover:text-foreground underline"
+                className="w-full py-2 rounded-md bg-primary text-primary-foreground text-sm font-bold hover:brightness-110 transition-all"
               >
                 Back to sign in
               </button>

@@ -43,6 +43,7 @@ type AuthContextType = {
   profile: Profile | null;
   loading: boolean;
   recoveryMode: boolean;
+  clearRecoveryMode: () => void;
   signIn: (email: string, password: string) => Promise<string | null>;
   signUp: (email: string, password: string, name: string) => Promise<string | null>;
   signOut: () => Promise<void>;
@@ -371,6 +372,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     profile,
     loading,
     recoveryMode,
+    clearRecoveryMode: () => setRecoveryMode(false),
     signIn,
     signUp,
     signOut,
