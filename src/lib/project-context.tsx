@@ -1101,8 +1101,16 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     db()
       .from("defects")
       .insert(toDbDefect(defect))
-      .then(() => notify("success", "Defect logged"))
-      .catch(() => notify("error", "Failed to log defect"));
+      .then((res: { error: { message: string } | null }) => {
+        if (res?.error) notify("error", `Failed to log defect: ${res.error.message}`);
+        else notify("success", "Defect logged");
+      })
+      .catch((err: unknown) =>
+        notify(
+          "error",
+          `Failed to log defect: ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      );
     if (defect.assignedDeveloperId) {
       notifyDeveloper(
         defect.assignedDeveloperId,
@@ -1138,8 +1146,16 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     db()
       .from("defects")
       .insert(toDbDefect(testCase))
-      .then(() => notify("success", "Test case(s) logged"))
-      .catch(() => notify("error", "Failed to log test case(s)"));
+      .then((res: { error: { message: string } | null }) => {
+        if (res?.error) notify("error", `Failed to log test case(s): ${res.error.message}`);
+        else notify("success", "Test case(s) logged");
+      })
+      .catch((err: unknown) =>
+        notify(
+          "error",
+          `Failed to log test case(s): ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      );
   }
 
   function updateDefect(id: string, updates: Partial<Defect>) {
@@ -1193,7 +1209,6 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
           return;
         }
         notify("success", "Defect deleted");
-        void reconcileDefects();
       })
       .catch((err: unknown) => {
         setAllDefects((prev) => [...prev.filter((d) => d.id !== id), ...removed]);
@@ -1202,17 +1217,6 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
           `Failed to delete defect: ${err instanceof Error ? err.message : String(err)}`,
         );
       });
-  }
-
-  // Re-sync the in-memory defect list with the database after mutations so the
-  // table always reflects server truth without a manual refresh.
-  async function reconcileDefects() {
-    try {
-      const { data } = await db().from("defects").select("*");
-      if (data) setAllDefects(data.map(fromDbDefect));
-    } catch {
-      // keep current in-memory state if the re-fetch fails
-    }
   }
 
   function nextTaskId(projectId: string): string {
